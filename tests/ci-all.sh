@@ -14,8 +14,15 @@ echo "--- ветка 3.49+: серверный контур, OLAP бюджета
 node tests/integ-349.mjs
 node tests/smoke-350.mjs План-табель-WFM-3.50.html
 node tests/smoke-351.mjs План-табель-WFM-3.51.html
+echo "--- ветка 3.52+: OLAP бригад, серверные бюджеты, офлайн-публикации, роли/квоты ---"
+node tests/smoke-352.mjs План-табель-WFM-3.52.html
+node tests/integ-353.mjs
+node tests/smoke-354.mjs План-табель-WFM-3.54.html
+node tests/integ-355.mjs
 echo "--- офлайн-сборки финалов ---"
 node tests/smoke-348.mjs План-табель-WFM-3.48-offline.html
 node tests/smoke-346.mjs План-табель-WFM-3.48-offline.html
 node tests/smoke-351.mjs План-табель-WFM-3.51-offline.html
-echo "CI-ALL: PASS (3.36–3.51: регрессы, поезд, серверный интег, офлайн финалов)"
+node tests/smoke-352.mjs План-табель-WFM-3.55-offline.html
+node tests/smoke-354.mjs План-табель-WFM-3.55-offline.html
+echo "CI-ALL: PASS (3.36–3.55: регрессы, поезд, серверные интеги, офлайн финалов)"

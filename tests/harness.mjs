@@ -21,7 +21,7 @@ export async function boot(fileRel, opts = {}) {
   });
   const dom = new JSDOM(html, {
     runScripts: 'dangerously', pretendToBeVisual: true,
-    url: 'http://127.0.0.1/', virtualConsole: vc,
+    url: (opts && opts.url) || 'http://127.0.0.1/', virtualConsole: vc,
   });
   const { window } = dom;
   let mmMatches = false;
@@ -35,7 +35,10 @@ export async function boot(fileRel, opts = {}) {
   window.IntersectionObserver = window.IntersectionObserver || class { observe() {} unobserve() {} disconnect() {} };
   window.WebSocket = window.WebSocket || class { constructor() { this.readyState = 0 } send() {} close() {} addEventListener() {} };
   window.BroadcastChannel = window.BroadcastChannel || class { constructor() {} postMessage() {} close() {} addEventListener() {} };
-  window.URL.createObjectURL = window.URL.createObjectURL || (() => 'blob:stub');
+  const baseUrl = (opts && opts.url) || 'http://127.0.0.1/';
+  if (!window.fetch) {
+    window.fetch = (u, o) => fetch(new URL(u, baseUrl).href, o);
+  }
   window.URL.revokeObjectURL = window.URL.revokeObjectURL || (() => {});
   window.addEventListener('error', e => runtimeErrors.push('window.onerror: ' + (e.message || e.error)));
   /* перехват скачиваний */

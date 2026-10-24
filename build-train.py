@@ -1664,7 +1664,306 @@ def V351(c):
     opsCacheKey,opsCacheLoad,opsCacheSave,opsCacheAdd,opsCacheClear,opsCacheBadge,opsCacheReplay,""", 'exports 351')
 
 
-SPECS = [('3.38', V338), ('3.39', V339), ('3.40', V340), ('3.41', V341), ('3.42', V342), ('3.43', V343), ('3.44', V344), ('3.45', V345), ('3.46', V346), ('3.47', V347), ('3.48', V348), ('3.49', V349), ('3.50', V350), ('3.51', V351)]
+
+# ============================== 3.52 OLAP БРИГАД И ПОКРЫТИЯ ==============================
+MODULE_352 = r"""/* ================= 3.52: OLAP БРИГАД И ПОКРЫТИЯ =================
+   Срез «бригада × месяц» за год: чел·дн дежурств, часы, дни выхода на дежурство,
+   конфликты с пожеланиями «не ставить»; меры переключаемы, drill-click открывает
+   годовой баланс бригады; CSV со штампом. */
+const BRIGOLAP_MEAS=[['duty','Чел·дн дежурств'],['hours','Часы дежурств'],['daysOn','Дней на дежурстве'],['conflicts','Конфликты с «не ставить»']];
+function brigOlap(year){
+  const bl=brigadeList().filter(b=>patById(b.patId));
+  const rows=bl.map(b=>{
+    const pat=patById(b.patId);
+    const anchor=addDays(b.anchor||`${year}-01-01`,-(b.offset||0));
+    const members=(b.members||[]).map(id=>emp(id)).filter(e=>e&&!e.fired);
+    const cells=[];
+    const T={duty:0,hours:0,daysOn:0,conflicts:0};
+    for(let m=1;m<=12;m++){
+      const DIM=dim(year,m);
+      const cell={duty:0,hours:0,daysOn:0,conflicts:0};
+      for(let d=1;d<=DIM;d++){
+        const c=patternCodeAt(pat,anchor,year,m,d);
+        if(!c)continue;
+        const dk=k(year,m,d);
+        let on=0,conf=0;
+        members.forEach(e=>{
+          if(wishBlock(e.id,dk)){conf++;return}
+          on++;
+        });
+        if(on>0){cell.daysOn++;cell.duty+=on;cell.hours+=on*patternHours(c)}
+        cell.conflicts+=conf;
+      }
+      ['duty','hours','daysOn','conflicts'].forEach(kk=>{T[kk]+=cell[kk]});
+      cells.push(cell);
+    }
+    return{brig:b,pat,members:members.length,cells,T};
+  });
+  return{year,rows};
+}
+function renderBrigOlap(){
+  const box=$('brigolapBox');if(!box)return;
+  const y=+$('brigolapYear')?+$('brigolapYear').value:cur.y;
+  const meas=$('brigolapMeas')?$('brigolapMeas').value:'duty';
+  const ol=brigOlap(y);
+  if(!ol.rows.length){box.innerHTML='<div class="hint">Сохранённых бригад с живыми шаблонами нет — создайте в мастере ротаций (веер по бригадам).</div>';return}
+  const head='<thead><tr><th>Бригада</th>'+MUP.map(mm=>`<th class="n">${mm.slice(0,3)}</th>`).join('')+'<th class="n">Год</th></tr></thead>';
+  const body=ol.rows.map(r=>{
+    const cells=r.cells.map((cl,mi)=>{
+      const v=meas==='hours'?Math.round(cl.hours):cl[meas];
+      const hot=meas==='conflicts'&&v>0;
+      const ttl=MUP[mi]+' '+y+': '+fmtStd(cl.duty,{unit:'чел·дн'})+', '+fmtStd(Math.round(cl.hours),{unit:'ч'})+', дней '+fmtStd(cl.daysOn)+(cl.conflicts?', конфликтов '+fmtStd(cl.conflicts):'');
+      return '<td class="n" data-brigolap="'+r.brig.id+':'+mi+'"'+(hot?' style="color:var(--red);font-weight:700"':'')+' title="'+ttl+'">'+(v?fmtStd(v):'—')+'</td>';
+    }).join('');
+    const tv=meas==='hours'?Math.round(r.T.hours):r.T[meas];
+    return '<tr><td><b>'+esc(r.brig.name)+'</b><div class="hint">'+fmtStd(r.members,{unit:'чел'})+' · фаза '+fmtStd(r.brig.offset||0,{unit:'дн'})+'</div></td>'+cells+'<td class="n"><b>'+fmtStd(tv)+'</b></td></tr>';
+  }).join('');
+  box.innerHTML='<div class="scroll-x"><table class="rtbl" role="table" aria-label="OLAP бригад '+y+': мера — '+esc((BRIGOLAP_MEAS.find(x=>x[0]===meas)||[])[1]||'')+'">'+head+'<tbody>'+body+'</tbody></table></div>'+
+    '<div class="hint" style="margin-top:6px">Значения за месяц по выбранной мере; красный — конфликты с пожеланиями «не ставить»; в title — полная сводка месяца; клик по ячейке открывает годовой баланс бригады.</div>';
+  box.querySelectorAll('[data-brigolap]').forEach(td=>td.onclick=()=>{
+    try{teleHit('brigolap:drill')}catch(e){}
+    openBrigadeYear(y);
+  });
+}
+function brigOlapCsvDl(){
+  const y=+$('brigolapYear')?+$('brigolapYear').value:cur.y;
+  const ol=brigOlap(y);
+  if(!ol.rows.length){toast('Нет бригад для выгрузки','err');return}
+  const rows=[['OLAP бригад',String(y),'штамп',stampPlain('an')],[],
+    ['Бригада','Месяц','Чел·дн дежурств','Часы','Дней на дежурстве','Конфликты с «не ставить»']];
+  ol.rows.forEach(r=>r.cells.forEach((cl,mi)=>rows.push([r.brig.name,MUP[mi],cl.duty,Math.round(cl.hours),cl.daysOn,cl.conflicts])));
+  downloadCsv('olap-brigad-'+y+'.csv',rows);
+  audit('Выгрузка OLAP бригад',`${y} · CSV`,'brigades');
+  try{teleHit('brigolap:csv')}catch(e){}
+  toast('OLAP бригад выгружен в CSV','ok');
+}
+"""
+
+def V352(c):
+    c.ver('3.52')
+    m9 = '/* ------------------------------- 9. СВОДНАЯ ОТРИСОВКА И ИНИЦИАЛИЗАЦИЯ ------------------------------- */'
+    i = c.s.find(m9); assert i >= 0
+    c.s = c.s[:i] + MODULE_352 + '\n' + c.s[i:]
+    c.rep("""  <div class="card" style="margin-top:12px"><h3>OLAP бюджета: подразделение × месяц<span class="sub">""",
+          """  <div class="card" style="margin-top:12px"><h3>OLAP бригад и покрытия: бригада × месяц<span class="sub">3.52 · чел·дн, часы, дни выхода, конфликты с пожеланиями · drill-click к годовому балансу</span></h3>
+    <div class="frow no-print" style="flex-wrap:wrap;gap:8px">
+      <div class="field" style="margin:0;max-width:120px"><label>Год</label><select class="inp" id="brigolapYear" aria-label="Год OLAP бригад"></select></div>
+      <div class="field" style="margin:0;max-width:240px"><label>Мера</label><select class="inp" id="brigolapMeas" aria-label="Мера OLAP бригад"></select></div>
+      <div class="field" style="margin:0;align-self:end"><button class="btn ghost small" id="btnBrigOlapCsv">⇩ CSV OLAP бригад</button></div>
+    </div>
+    <div id="brigolapBox" style="margin-top:8px"></div>
+  </div>
+  <div class="card" style="margin-top:12px"><h3>OLAP бюджета: подразделение × месяц<span class="sub">""", 'brigolap card')
+    c.rep("  bindClick('btnBolapCsv',budgetOlapCsvDl);   /* 3.50 */",
+          "  bindClick('btnBolapCsv',budgetOlapCsvDl);   /* 3.50 */\n"
+          "  try{\n"
+          "    const byy=$('brigolapYear');if(byy){byy.innerHTML=Array.from({length:YMAX-YMIN+1},(_,i)=>`<option ${YMIN+i===cur.y?'selected':''}>${YMIN+i}</option>`).join('');byy.onchange=()=>renderBrigOlap()}\n"
+          "    const bm2=$('brigolapMeas');if(bm2){bm2.innerHTML=BRIGOLAP_MEAS.map(x=>`<option value=\"${x[0]}\">${esc(x[1])}</option>`).join('');bm2.onchange=()=>renderBrigOlap()}\n"
+          "  }catch(e){}\n"
+          "  bindClick('btnBrigOlapCsv',brigOlapCsvDl);  /* 3.52 */", 'brigolap binds')
+    c.rep('try{renderBudgetOlap()}catch(e){}}   /* 3.36–3.50 хуки */',
+          'try{renderBudgetOlap()}catch(e){};try{renderBrigOlap()}catch(e){}}   /* 3.36–3.52 хуки */', 'render hook 352')
+    c.rep("""  {id:'bolap',tab:'an',name:'OLAP бюджета: подразделение × месяц',form:'таблица-срез с мерами план/факт/лимит/отклонение/%, итог за год, drill-click к лимитам',source:'канон: план/факт, ставки, state.budgets'}
+];""",
+          """  {id:'bolap',tab:'an',name:'OLAP бюджета: подразделение × месяц',form:'таблица-срез с мерами план/факт/лимит/отклонение/%, итог за год, drill-click к лимитам',source:'канон: план/факт, ставки, state.budgets'},
+  {id:'brigolap',tab:'an',name:'OLAP бригад и покрытия: бригада × месяц',form:'таблица-срез: чел·дн, часы, дни выхода, конфликты с пожеланиями; drill-click к годовому балансу',source:'канон: state.brigades, пожелания, производственный календарь'}
+];""", 'widget 352')
+    c.rep("""note:'3.50: фильтры год/мера, drill-click ячейки к лимитам месяца, живой пересчёт, подсветка перерасхода, CSV со штампом'}];""",
+          """note:'3.50: фильтры год/мера, drill-click ячейки к лимитам месяца, живой пересчёт, подсветка перерасхода, CSV со штампом'},
+  {id:'brigolap',name:'OLAP бригад и покрытия',tab:'an',crit:{filter:1,drill:1,live:1,insight:1,export:1},note:'3.52: фильтры год/мера, drill-click к годовому балансу бригады, живой пересчёт, подсветка конфликтов, CSV со штампом'}];""", 'interactive 352')
+    c.rep("""    {ic:'💠',title:'OLAP бюджета: подразделение × месяц',hint:'аналитика · 3.50',run:()=>{showTab('an');setTimeout(()=>{const c=$('bolapBox');if(c&&c.scrollIntoView)c.scrollIntoView({behavior:'smooth',block:'center'});renderBudgetOlap()},300)}},""",
+          """    {ic:'💠',title:'OLAP бюджета: подразделение × месяц',hint:'аналитика · 3.50',run:()=>{showTab('an');setTimeout(()=>{const c=$('bolapBox');if(c&&c.scrollIntoView)c.scrollIntoView({behavior:'smooth',block:'center'});renderBudgetOlap()},300)}},
+    {ic:'🧿',title:'OLAP бригад и покрытия: бригада × месяц',hint:'аналитика · 3.52',run:()=>{showTab('an');setTimeout(()=>{const c=$('brigolapBox');if(c&&c.scrollIntoView)c.scrollIntoView({behavior:'smooth',block:'center'});renderBrigOlap()},300)}},""", 'palette 352')
+    c.rep("""      <div class="lbl" style="margin-top:12px">Новое в версии 3.51 — мобильный офлайн-кэш операций</div>""",
+          """      <div class="lbl" style="margin-top:12px">Новое в версии 3.52 — OLAP бригад и покрытия</div>
+      <ul class="hint" style="margin:6px 0 18px;line-height:1.6">
+        <li><b>Срез «бригада × месяц»</b> в «Аналитике»: меры — чел·дн дежурств, часы дежурств, дни выхода на дежурство, конфликты с пожеланиями «не ставить» (красная подсветка); годовая колонка-итог; в title ячейки — полная сводка месяца.</li>
+        <li><b>Drill-click</b> по ячейке открывает «⚖ Годовой баланс бригады» за тот же год; фильтры «год» и «мера», живой пересчёт, CSV со штампом; виджет и отчёт 5/5 в реестрах НСИ; телеметрия <code>brigolap:csv</code>, <code>brigolap:drill</code>.</li>
+      </ul>
+      <div class="lbl" style="margin-top:12px">Новое в версии 3.51 — мобильный офлайн-кэш операций</div>""", 'help 352')
+    c.rep("""    opsCacheKey,opsCacheLoad,opsCacheSave,opsCacheAdd,opsCacheClear,opsCacheBadge,opsCacheReplay,""",
+          """    opsCacheKey,opsCacheLoad,opsCacheSave,opsCacheAdd,opsCacheClear,opsCacheBadge,opsCacheReplay,
+    /* ===== 3.52: OLAP бригад ===== */
+    get BRIGOLAP_MEAS(){return BRIGOLAP_MEAS},brigOlap,renderBrigOlap,brigOlapCsvDl,""", 'exports 352')
+
+# ============================== 3.53 КЛИЕНТ СИНХРОНИЗАЦИИ БЮДЖЕТОВ ==============================
+MODULE_353 = r"""/* ================= 3.53: КЛИЕНТ СЕРВЕРНОГО КОНТУРА БЮДЖЕТОВ =================
+   GET/PUT /api/v1/budgets: выгрузка и подтягивание лимитов ФОТ; merge по месяцам
+   с last-write-wins по ts; авто-подтягивание при WS-событии {type:'budgets'}. */
+function budgetsTsGet(mk){return ((state.budgetsTs||{})[mk])||0}
+function budgetsTsSet(mk,ts){state.budgetsTs=state.budgetsTs||{};state.budgetsTs[mk]=ts}
+function budgetItemsOut(){
+  const out={};
+  Object.keys(budgets()).forEach(mk=>{
+    const lim=budgets()[mk];
+    if(!lim||!Object.keys(lim).length)return;
+    out[mk]=Object.assign({},lim,{ts:budgetsTsGet(mk)||0});
+  });
+  return out;
+}
+async function budgetsPush(){
+  if(!/^https?:$/.test(location.protocol)){toast('Выгрузка бюджетов на сервер доступна при работе по HTTP (сервер ЛВС)','err');return 0}
+  try{
+    const hd={'Content-Type':'application/json'};if(wsToken())hd.Authorization='Bearer '+wsToken();
+    const r=await fetch('api/v1/budgets',{method:'PUT',headers:hd,body:JSON.stringify({items:budgetItemsOut()})});
+    const j=await r.json();
+    if(j.ok){logAct('Бюджеты','выгружены на сервер ('+j.saved+' мес. из '+j.total+')');
+      try{teleHit('budget:push')}catch(e){}
+      toast('Лимиты ФОТ на сервере: месяцев '+fmtStd(j.saved)+' из '+fmtStd(j.total),'ok');
+      return j.saved;
+    }
+    toast('Сервер отклонил бюджеты: '+(j.err||(j.errors||[]).map(e=>e.err||JSON.stringify(e)).join('; ')||'HTTP '+r.status),'err');
+    return 0;
+  }catch(e){toast('Сервер ЛВС недоступен: '+String(e.message||e).slice(0,100),'err');return 0}
+}
+async function budgetsPull(){
+  if(!/^https?:$/.test(location.protocol)){toast('Доступно при работе по HTTP (сервер ЛВС)','err');return 0}
+  try{
+    const r=await fetch('api/v1/budgets'+(wsToken()?'?token='+encodeURIComponent(wsToken()):''),{cache:'no-store'});
+    const j=await r.json();
+    if(!j.ok){toast('Ответ сервера: '+(j.err||'HTTP '+r.status),'err');return 0}
+    let ch=0;
+    Object.keys(j.items||{}).forEach(mk=>{
+      const rec=j.items[mk];
+      if(!rec||!rec.limits)return;
+      if((rec.ts||0)>budgetsTsGet(mk)){
+        budgets()[mk]=Object.assign({},rec.limits);
+        budgetsTsSet(mk,rec.ts||0);
+        ch++;
+      }
+    });
+    if(ch){save(true);try{renderBudgets();renderBudgetNag()}catch(e){}}
+    try{teleHit('budget:pull')}catch(e){}
+    toast(ch?'Лимиты ФОТ с сервера: месяцев обновлено '+fmtStd(ch):'Лимиты ФОТ с сервера: новых версий нет','ok');
+    return ch;
+  }catch(e){toast('Сервер ЛВС недоступен: '+String(e.message||e).slice(0,100),'err');return 0}
+}
+"""
+
+def V353(c):
+    c.ver('3.53')
+    m9 = '/* ------------------------------- 9. СВОДНАЯ ОТРИСОВКА И ИНИЦИАЛИЗАЦИЯ ------------------------------- */'
+    i = c.s.find(m9); assert i >= 0
+    c.s = c.s[:i] + MODULE_353 + '\n' + c.s[i:]
+    c.rep("  save(true);\n  audit('Лимит бюджета ФОТ',", "  save(true);\n  try{budgetsTsSet(mk,Date.now())}catch(e){}   /* 3.53: ts для merge с сервером */\n  audit('Лимит бюджета ФОТ',", 'budget ts')
+    c.rep("""        <button class="btn ghost small" id="btnBudgetRefresh">⟳ Пересчитать</button>""",
+          """        <button class="btn ghost small" id="btnBudgetRefresh">⟳ Пересчитать</button>
+        <button class="btn ghost small" id="btnBudgetPush" title="Общий справочник лимитов ФОТ сервера ЛВС (3.53)">⇪ Бюджеты на сервер</button>
+        <button class="btn ghost small" id="btnBudgetPull" title="Слить лимиты с сервера (last-write-wins по ts месяца)">⇩ Бюджеты с сервера</button>""", 'budget sync buttons')
+    c.rep("  bindClick('btnBudgetCsv',budgetsCsvDl);                /* 3.39 */",
+          "  bindClick('btnBudgetCsv',budgetsCsvDl);                /* 3.39 */\n"
+          "  bindClick('btnBudgetPush',budgetsPush);                /* 3.53 */\n"
+          "  bindClick('btnBudgetPull',budgetsPull);                /* 3.53 */", 'budget sync binds')
+    c.rep("    if(m.type==='brigades'){   /* 3.49: серверный справочник бригад обновился — подтягиваем merge'ом */",
+          "    if(m.type==='budgets'){   /* 3.53: серверные лимиты ФОТ обновились — подтягиваем merge'ом */\n"
+          "      try{budgetsPull()}catch(e){}\n"
+          "      return;\n"
+          "    }\n"
+          "    if(m.type==='brigades'){   /* 3.49: серверный справочник бригад обновился — подтягиваем merge'ом */", 'ws budgets')
+    c.rep("""    {ic:'⇩',title:'Бригады с сервера ЛВС',hint:'синхронизация · 3.49',run:()=>{showTab('plan');setTimeout(()=>brigadesPull(),250)}},""",
+          """    {ic:'⇩',title:'Бригады с сервера ЛВС',hint:'синхронизация · 3.49',run:()=>{showTab('plan');setTimeout(()=>brigadesPull(),250)}},
+    {ic:'💰',title:'Бюджеты ФОТ на сервер ЛВС',hint:'синхронизация · 3.53',run:()=>{showTab('data');setTimeout(()=>budgetsPush(),250)}},
+    {ic:'💰',title:'Бюджеты ФОТ с сервера ЛВС',hint:'синхронизация · 3.53',run:()=>{showTab('data');setTimeout(()=>budgetsPull(),250)}},""", 'palette 353')
+    c.rep("""      <div class="lbl" style="margin-top:12px">Новое в версии 3.52 — OLAP бригад и покрытия</div>""",
+          """      <div class="lbl" style="margin-top:12px">Новое в версии 3.53 — серверный контур бюджетов ФОТ</div>
+      <ul class="hint" style="margin:6px 0 18px;line-height:1.6">
+        <li><b>Сервер ЛВС</b>: <code>GET/PUT /api/v1/budgets</code> — общий справочник лимитов ФОТ (файл <code>PT_BUDGET_FILE</code>): формат <code>{items:{"YYYY-MM":{deptId:лимит|null}}}</code>, права staff/admin/budget, валидация формата месяцев и чисел, merge по месяцам last-write-wins по ts, аудит «budgets», WS-трансляция <code>{type:'budgets'}</code>, персистентность.</li>
+        <li><b>Клиент</b>: кнопки «⇪/⇩ Бюджеты» в карточке «Бюджет и лимиты ФОТ» и команды палитры; локальные изменения получают ts (<code>state.budgetsTs</code>); при WS-событии лимиты подтягиваются автоматически; телеметрия budget:push/budget:pull.</li>
+      </ul>
+      <div class="lbl" style="margin-top:12px">Новое в версии 3.52 — OLAP бригад и покрытия</div>""", 'help 353')
+    c.rep("""    get BRIGOLAP_MEAS(){return BRIGOLAP_MEAS},brigOlap,renderBrigOlap,brigOlapCsvDl,""",
+          """    get BRIGOLAP_MEAS(){return BRIGOLAP_MEAS},brigOlap,renderBrigOlap,brigOlapCsvDl,
+    /* ===== 3.53: клиент бюджетов ===== */
+    budgetsTsGet,budgetsTsSet,budgetItemsOut,budgetsPush,budgetsPull,""", 'exports 353')
+
+# ============================== 3.54 ОФЛАЙН-КЭШ ПОЛНЫХ ПУБЛИКАЦИЙ ==============================
+MODULE_354 = r"""/* ================= 3.54: ОФЛАЙН-КЭШ ПОЛНЫХ ПУБЛИКАЦИЙ =================
+   Полная публикация канона (справочники, документы, undo — всё, что не покрыто
+   точечными ops) офлайн откладывается: save() ставит флаг pt.pub.pending;
+   при реконнекте (WS onopen) публикация уходит автоматически. */
+function pubPendingGet(){try{return localStorage.getItem('pt.pub.pending')==='1'}catch(e){return false}}
+function pubPendingSet(on){try{on?localStorage.setItem('pt.pub.pending','1'):localStorage.removeItem('pt.pub.pending')}catch(e){}pubPendingBadge()}
+function pubPendingSetTrue354(){pubPendingSet(true)}
+function pubPendingBadge(){
+  const n=pubPendingGet();
+  const el=$('pubPendingPill');
+  if(el){el.style.display=n?'':'none';el.textContent='📦 публикация ждёт сети'}
+  return n;
+}
+function pubPendingFlush(){
+  if(!pubPendingGet()){toast('Отложенных публикаций нет','ok');return 0}
+  if(!wsOn()||!opsActive()){toast('Сети нет — публикация останется отложенной','err');return 0}
+  pubPendingSet(false);
+  try{
+    wsPublish(false);
+    audit('Полная публикация после офлайна','автопри реконнекте (3.54)','ops');
+    try{teleHit('pub:offline')}catch(e){}
+    toast('Отложенная полная публикация отправлена на сервер','ok');
+  }catch(e){pubPendingSet(true);toast('Публикация не удалась: '+String(e.message||e),'err');return 0}
+  return 1;
+}
+"""
+
+def V354(c):
+    c.ver('3.54')
+    m9 = '/* ------------------------------- 9. СВОДНАЯ ОТРИСОВКА И ИНИЦИАЛИЗАЦИЯ ------------------------------- */'
+    i = c.s.find(m9); assert i >= 0
+    c.s = c.s[:i] + MODULE_354 + '\n' + c.s[i:]
+    c.rep("  lastSave=now;savePend=false;",
+          "  lastSave=now;savePend=false;\n"
+          "  try{if(typeof wsOn==='function'&&!wsOn()&&typeof perm==='function'&&perm('edit'))pubPendingSetTrue354()}catch(e){}   /* 3.54: офлайн-флаг полной публикации */", 'save hook 354')
+    c.rep("""<span class="pill a" id="opsCachePill" style="margin-left:6px;display:none" title="3.51: операции, накопленные офлайн, — уйдут на сервер после реконнекта"></span>""",
+          """<span class="pill a" id="opsCachePill" style="margin-left:6px;display:none" title="3.51: операции, накопленные офлайн, — уйдут на сервер после реконнекта"></span><span class="pill a" id="pubPendingPill" style="margin-left:6px;display:none" title="3.54: полная публикация канона отложена до появления сети"></span>""", 'pub pill')
+    c.rep("    try{if(opsCacheLoad().length)setTimeout(()=>opsCacheReplay(),400);opsCacheBadge()}catch(e){}   /* 3.51: реконнект воспроизводит офлайн-очередь */",
+          "    try{if(opsCacheLoad().length)setTimeout(()=>opsCacheReplay(),400);opsCacheBadge()}catch(e){}   /* 3.51: реконнект воспроизводит офлайн-очередь */\n"
+          "    try{if(pubPendingGet())setTimeout(()=>pubPendingFlush(),900);pubPendingBadge()}catch(e){}   /* 3.54: отложенная полная публикация */", 'onopen pub')
+    c.rep("  try{a11yInit()}catch(e){}   /* 3.45: a11y-инициализация */",
+          "  try{a11yInit()}catch(e){}   /* 3.45: a11y-инициализация */\n  try{pubPendingBadge();opsCacheBadge()}catch(e){}   /* 3.51/3.54: пиллы очередей */", 'boot badges')
+    c.rep("""    {ic:'📴',title:'Офлайн-очередь операций: воспроизвести',hint:'синхронизация · 3.51',run:()=>opsCacheReplay()},""",
+          """    {ic:'📴',title:'Офлайн-очередь операций: воспроизвести',hint:'синхронизация · 3.51',run:()=>opsCacheReplay()},
+    {ic:'📦',title:'Отложенная полная публикация: отправить сейчас',hint:'синхронизация · 3.54',run:()=>pubPendingFlush()},""", 'palette 354')
+    c.rep("""      <div class="lbl" style="margin-top:12px">Новое в версии 3.52 — OLAP бригад и покрытия</div>""",
+          """      <div class="lbl" style="margin-top:12px">Новое в версии 3.54 — офлайн-кэш полных публикаций</div>
+      <ul class="hint" style="margin:6px 0 18px;line-height:1.6">
+        <li><b>Отложенная полная публикация</b>: правки, не покрываемые точечными операциями (справочники, документы, undo), сделанные офлайн, помечаются флагом <code>pt.pub.pending</code> при каждом автосохранении; при реконнекте (WS onopen) полная публикация уходит автоматически через ~1 с.</li>
+        <li><b>Индикатор и контроль</b>: пилл «📦 публикация ждёт сети» в шапке; команда палитры «📦 Отложенная полная публикация: отправить сейчас»; аудит «Полная публикация после офлайна» и телеметрия <code>pub:offline</code>; при сбое отправки флаг возвращается.</li>
+      </ul>
+      <div class="lbl" style="margin-top:12px">Новое в версии 3.52 — OLAP бригад и покрытия</div>""", 'help 354')
+    c.rep("""    budgetsTsGet,budgetsTsSet,budgetItemsOut,budgetsPush,budgetsPull,""",
+          """    budgetsTsGet,budgetsTsSet,budgetItemsOut,budgetsPush,budgetsPull,
+    /* ===== 3.54: офлайн-кэш полных публикаций ===== */
+    pubPendingGet,pubPendingSet,pubPendingBadge,pubPendingFlush,""", 'exports 354')
+
+# ============================== 3.55 КЛИЕНТ: РОЛИ BRIG/BUDGET ==============================
+def V355(c):
+    c.ver('3.55')
+    c.rep("""const ROLE_PERM={
+  admin:{edit:1,admin:1,staff:1,import:1,sign:1,chat:1},
+  hr:{edit:1,staff:1,import:1,sign:1,chat:1},    /* кадровик: штатка, приказы, импорт базы — без статусов периодов */
+  editor:{edit:1,chat:1},                        /* редактор: правка данных */
+  tab:{edit:1,planOnly:1,chat:1},                /* табельщик: план и факт, без справочников и импорта */
+  viewer:{chat:1}                                /* наблюдатель: чтение + мессенджер (3.17: chat можно запретить персонально) */
+};""",
+          """const ROLE_PERM={
+  admin:{edit:1,admin:1,staff:1,import:1,sign:1,chat:1,brig:1,budget:1},
+  hr:{edit:1,staff:1,import:1,sign:1,chat:1,brig:1,budget:1},    /* кадровик: штатка, приказы, импорт базы — без статусов периодов */
+  editor:{edit:1,chat:1,brig:1},                        /* редактор: правка данных + бригады (3.55) */
+  tab:{edit:1,planOnly:1,chat:1,brig:1},                /* табельщик: план и факт + бригады (3.55) */
+  viewer:{chat:1}                                /* наблюдатель: чтение + мессенджер (3.17: chat можно запретить персонально) */
+};""", 'client role perm 355')
+    c.rep("""      <div class="lbl" style="margin-top:12px">Новое в версии 3.54 — офлайн-кэш полных публикаций</div>""",
+          """      <div class="lbl" style="margin-top:12px">Новое в версии 3.55 — серверные роли бригад и квоты PUT</div>
+      <ul class="hint" style="margin:6px 0 18px;line-height:1.6">
+        <li><b>Сервер</b>: право <code>brig</code> у ролей admin/hr/editor/tab — PUT /api/v1/brigades доступен без staff; часовые квоты PUT бригад <code>PT_BRIG_QUOTA='editor:60,tab:120'</code> — при исчерпании 429 с <code>retryAfterMin</code> и аудитом «brig-quota»; остаток квоты возвращается в ответе PUT (<code>quotaLeft</code>); право <code>budget</code> у admin/hr для PUT /api/v1/budgets.</li>
+        <li><b>Клиент</b>: матрица прав ROLE_PERM учитывает brig/budget; toast выгрузки бригад показывает остаток часовой квоты, если сервер его вернул.</li>
+      </ul>
+      <div class="lbl" style="margin-top:12px">Новое в версии 3.54 — офлайн-кэш полных публикаций</div>""", 'help 355')
+    c.rep("""      toast('Бригады на сервере: обновлено '+fmtStd(j.saved)+' из '+fmtStd(j.total),'ok');""",
+          """      toast('Бригады на сервере: обновлено '+fmtStd(j.saved)+' из '+fmtStd(j.total)+(j.quotaLeft!=null?' · остаток квоты часа: '+fmtStd(j.quotaLeft):''),'ok');""", 'quota toast')
+    c.rep("""    get FEATURE_MAP(){return FEATURE_MAP},openFeatureMap,trainSelfAudit,openSelfAudit,""",
+          """    get FEATURE_MAP(){return FEATURE_MAP},openFeatureMap,trainSelfAudit,openSelfAudit,""", 'exports 355 anchor noop')
+
+SPECS = [('3.38', V338), ('3.39', V339), ('3.40', V340), ('3.41', V341), ('3.42', V342), ('3.43', V343), ('3.44', V344), ('3.45', V345), ('3.46', V346), ('3.47', V347), ('3.48', V348), ('3.49', V349), ('3.50', V350), ('3.51', V351), ('3.52', V352), ('3.53', V353), ('3.54', V354), ('3.55', V355)]
 
 def main():
     args = sys.argv[1:] or ['3.38', '3.41']

@@ -6,7 +6,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>План-табель служебной деятельности · WFM 3.51</title>
+<title>План-табель служебной деятельности · WFM 3.55</title>
 <meta name="description" content="Планирование служебной деятельности, табель учёта рабочего времени (Т-13), дежурства, производственный календарь 2010–2035, аналитика загруженности, импорт PDF/CSV, экспорт Excel.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -856,7 +856,7 @@ html[data-theme=dark] body.cvd{--viz1:#56B4E9;--viz2:#009E73;--viz3:#E69F00;--vi
     <div class="crest">ПТ</div>
     <div>
       <div class="org" id="orgName">—</div>
-      <div class="sub">Планирование служебной деятельности · Табель · Дежурства · Обмены смен · Допуски · Аудит<span id="saveDot" title="Автосохранение в браузере"></span><span class="pill a" id="opsCachePill" style="margin-left:6px;display:none" title="3.51: операции, накопленные офлайн, — уйдут на сервер после реконнекта"></span><span class="pill" id="rolePill" style="margin-left:8px;cursor:help"></span><span class="pill g" id="wsPill" style="margin-left:6px;display:none"></span></div>
+      <div class="sub">Планирование служебной деятельности · Табель · Дежурства · Обмены смен · Допуски · Аудит<span id="saveDot" title="Автосохранение в браузере"></span><span class="pill a" id="opsCachePill" style="margin-left:6px;display:none" title="3.51: операции, накопленные офлайн, — уйдут на сервер после реконнекта"></span><span class="pill a" id="pubPendingPill" style="margin-left:6px;display:none" title="3.54: полная публикация канона отложена до появления сети"></span><span class="pill" id="rolePill" style="margin-left:8px;cursor:help"></span><span class="pill g" id="wsPill" style="margin-left:6px;display:none"></span></div>
     </div>
     <div class="mnav no-print">
       <button class="sq" id="prevM" title="Предыдущий месяц" aria-label="Предыдущий месяц">‹</button>
@@ -1368,6 +1368,14 @@ html[data-theme=dark] body.cvd{--viz1:#56B4E9;--viz2:#009E73;--viz3:#E69F00;--vi
     <div class="field" style="margin:0;align-self:end"><button class="btn ghost small" id="btnFcCsv">⇩ CSV прогноза</button></div></div>
     <div id="fcBox" style="margin-top:8px"></div>
   </div>
+  <div class="card" style="margin-top:12px"><h3>OLAP бригад и покрытия: бригада × месяц<span class="sub">3.52 · чел·дн, часы, дни выхода, конфликты с пожеланиями · drill-click к годовому балансу</span></h3>
+    <div class="frow no-print" style="flex-wrap:wrap;gap:8px">
+      <div class="field" style="margin:0;max-width:120px"><label>Год</label><select class="inp" id="brigolapYear" aria-label="Год OLAP бригад"></select></div>
+      <div class="field" style="margin:0;max-width:240px"><label>Мера</label><select class="inp" id="brigolapMeas" aria-label="Мера OLAP бригад"></select></div>
+      <div class="field" style="margin:0;align-self:end"><button class="btn ghost small" id="btnBrigOlapCsv">⇩ CSV OLAP бригад</button></div>
+    </div>
+    <div id="brigolapBox" style="margin-top:8px"></div>
+  </div>
   <div class="card" style="margin-top:12px"><h3>OLAP бюджета: подразделение × месяц<span class="sub">3.50 · план/факт/лимит/отклонение/% исполнения · drill-click к лимитам месяца</span></h3>
     <div class="frow no-print" style="flex-wrap:wrap;gap:8px">
       <div class="field" style="margin:0;max-width:120px"><label>Год</label><select class="inp" id="bolapYear" aria-label="Год OLAP бюджета"></select></div>
@@ -1661,6 +1669,8 @@ html[data-theme=dark] body.cvd{--viz1:#56B4E9;--viz2:#009E73;--viz3:#E69F00;--vi
       <div class="mini" style="margin-top:8px;display:flex;gap:6px">
         <button class="btn ghost small" id="btnBudgetCsv">⇩ CSV бюджета</button>
         <button class="btn ghost small" id="btnBudgetRefresh">⟳ Пересчитать</button>
+        <button class="btn ghost small" id="btnBudgetPush" title="Общий справочник лимитов ФОТ сервера ЛВС (3.53)">⇪ Бюджеты на сервер</button>
+        <button class="btn ghost small" id="btnBudgetPull" title="Слить лимиты с сервера (last-write-wins по ts месяца)">⇩ Бюджеты с сервера</button>
       </div>
       <div class="hint" style="margin-top:8px">Методика: часы × ставка ₽/ч (персональная или общая в настройках) + ночные (надбавка %) + работа в выходные/праздники (8 ч × надбавка %). «≈» предлагает лимит = план прошлого месяца × 1,05.</div>
       </div>
@@ -2951,6 +2961,7 @@ function save(force){
     return;
   }
   lastSave=now;savePend=false;
+  try{if(typeof wsOn==='function'&&!wsOn()&&typeof perm==='function'&&perm('edit'))pubPendingSetTrue354()}catch(e){}   /* 3.54: офлайн-флаг полной публикации */
   try{updatePendingBadges()}catch(e){}   /* 3.35: бейджи «ожидают» */
   let json;try{json=JSON.stringify(state)}catch(e){return}
   const d=$('saveDot');if(d){d.classList.add('on');clearTimeout(saveT);saveT=setTimeout(()=>{const x=$('saveDot');if(x)x.classList.remove('on')},850)}
@@ -3553,6 +3564,26 @@ function showHelp(){
     <div>
       <div class="lbl">Назначение</div>
       <p class="hint" style="margin-top:6px">Приложение для планирования служебной деятельности подразделений на месяц и ведения табеля учёта рабочего времени (форма Т-13) с расчётом коэффициентной нагрузки, контролем норм ТК РФ, распределением дежурств и аналитикой отсутствий за неделю / месяц / квартал / год.</p>
+      <div class="lbl" style="margin-top:12px">Новое в версии 3.53 — серверный контур бюджетов ФОТ</div>
+      <ul class="hint" style="margin:6px 0 18px;line-height:1.6">
+        <li><b>Сервер ЛВС</b>: <code>GET/PUT /api/v1/budgets</code> — общий справочник лимитов ФОТ (файл <code>PT_BUDGET_FILE</code>): формат <code>{items:{"YYYY-MM":{deptId:лимит|null}}}</code>, права staff/admin/budget, валидация формата месяцев и чисел, merge по месяцам last-write-wins по ts, аудит «budgets», WS-трансляция <code>{type:'budgets'}</code>, персистентность.</li>
+        <li><b>Клиент</b>: кнопки «⇪/⇩ Бюджеты» в карточке «Бюджет и лимиты ФОТ» и команды палитры; локальные изменения получают ts (<code>state.budgetsTs</code>); при WS-событии лимиты подтягиваются автоматически; телеметрия budget:push/budget:pull.</li>
+      </ul>
+      <div class="lbl" style="margin-top:12px">Новое в версии 3.55 — серверные роли бригад и квоты PUT</div>
+      <ul class="hint" style="margin:6px 0 18px;line-height:1.6">
+        <li><b>Сервер</b>: право <code>brig</code> у ролей admin/hr/editor/tab — PUT /api/v1/brigades доступен без staff; часовые квоты PUT бригад <code>PT_BRIG_QUOTA='editor:60,tab:120'</code> — при исчерпании 429 с <code>retryAfterMin</code> и аудитом «brig-quota»; остаток квоты возвращается в ответе PUT (<code>quotaLeft</code>); право <code>budget</code> у admin/hr для PUT /api/v1/budgets.</li>
+        <li><b>Клиент</b>: матрица прав ROLE_PERM учитывает brig/budget; toast выгрузки бригад показывает остаток часовой квоты, если сервер его вернул.</li>
+      </ul>
+      <div class="lbl" style="margin-top:12px">Новое в версии 3.54 — офлайн-кэш полных публикаций</div>
+      <ul class="hint" style="margin:6px 0 18px;line-height:1.6">
+        <li><b>Отложенная полная публикация</b>: правки, не покрываемые точечными операциями (справочники, документы, undo), сделанные офлайн, помечаются флагом <code>pt.pub.pending</code> при каждом автосохранении; при реконнекте (WS onopen) полная публикация уходит автоматически через ~1 с.</li>
+        <li><b>Индикатор и контроль</b>: пилл «📦 публикация ждёт сети» в шапке; команда палитры «📦 Отложенная полная публикация: отправить сейчас»; аудит «Полная публикация после офлайна» и телеметрия <code>pub:offline</code>; при сбое отправки флаг возвращается.</li>
+      </ul>
+      <div class="lbl" style="margin-top:12px">Новое в версии 3.52 — OLAP бригад и покрытия</div>
+      <ul class="hint" style="margin:6px 0 18px;line-height:1.6">
+        <li><b>Срез «бригада × месяц»</b> в «Аналитике»: меры — чел·дн дежурств, часы дежурств, дни выхода на дежурство, конфликты с пожеланиями «не ставить» (красная подсветка); годовая колонка-итог; в title ячейки — полная сводка месяца.</li>
+        <li><b>Drill-click</b> по ячейке открывает «⚖ Годовой баланс бригады» за тот же год; фильтры «год» и «мера», живой пересчёт, CSV со штампом; виджет и отчёт 5/5 в реестрах НСИ; телеметрия <code>brigolap:csv</code>, <code>brigolap:drill</code>.</li>
+      </ul>
       <div class="lbl" style="margin-top:12px">Новое в версии 3.51 — мобильный офлайн-кэш операций</div>
       <ul class="hint" style="margin:6px 0 18px;line-height:1.6">
         <li><b>Кэш точечных операций</b>: правки плана/факта/заявок, сделанные без сети (WS выключен), зеркалятся в localStorage (<code>pt.ops.cache</code>, до 500 операций); при реконнекте (WS onopen) очередь автоматически воспроизводится через операционный протокол и уходит батчем.</li>
@@ -4080,7 +4111,7 @@ function renderBulk(){
   $('patStart').max=dim(cur.y,cur.m);
   const pa=$('patAnchor');if(pa&&!pa.value)pa.value=`${cur.y}-${pad2(cur.m)}-01`;
 }
-function renderPatterns(){renderBulk();try{renderBrigades()}catch(e){};try{renderMobiNav()}catch(e){};try{renderBudgets()}catch(e){};try{renderCertForecast()}catch(e){};try{renderForecastCard()}catch(e){};try{a11yPatch()}catch(e){};try{renderBudgetOlap()}catch(e){}}   /* 3.36–3.50 хуки */
+function renderPatterns(){renderBulk();try{renderBrigades()}catch(e){};try{renderMobiNav()}catch(e){};try{renderBudgets()}catch(e){};try{renderCertForecast()}catch(e){};try{renderForecastCard()}catch(e){};try{a11yPatch()}catch(e){};try{renderBudgetOlap()}catch(e){};try{renderBrigOlap()}catch(e){}}   /* 3.36–3.52 хуки */
 function warnEmpSet(y,m){
   /* 3.20: сотрудники с нарушениями/предупреждениями за месяц — для сортировки и фильтра */
   const S=new Set();
@@ -6329,7 +6360,8 @@ const WIDGET_REGISTRY=[
   {id:'covWizard',tab:'plan',name:'Мастер ротаций: предпросмотр покрытия',form:'календарь покрытия по дням (веер по бригадам) с подсветкой дефицита',source:'канон: state.patterns, минимум подразделения'},
   {id:'rotWhatIf',tab:'plan',name:'What-if ротации: бригады против покрытия',form:'таблица сценариев B бригад: покрытие мин/макс, дефицит, нагрузка; оптимум подсвечен',source:'канон: state.patterns, штат подразделения, минимум'},
   {id:'brigYear',tab:'plan',name:'Годовой баланс бригад',form:'таблица бригад за год: дежурства мин–макс, конфликты с пожеланиями, SD; ребалансировка',source:'канон: state.brigades, пожелания, производственный календарь'},
-  {id:'bolap',tab:'an',name:'OLAP бюджета: подразделение × месяц',form:'таблица-срез с мерами план/факт/лимит/отклонение/%, итог за год, drill-click к лимитам',source:'канон: план/факт, ставки, state.budgets'}
+  {id:'bolap',tab:'an',name:'OLAP бюджета: подразделение × месяц',form:'таблица-срез с мерами план/факт/лимит/отклонение/%, итог за год, drill-click к лимитам',source:'канон: план/факт, ставки, state.budgets'},
+  {id:'brigolap',tab:'an',name:'OLAP бригад и покрытия: бригада × месяц',form:'таблица-срез: чел·дн, часы, дни выхода, конфликты с пожеланиями; drill-click к годовому балансу',source:'канон: state.brigades, пожелания, производственный календарь'}
 ];
 function widgetsPassport(){
   return WIDGET_REGISTRY.map(w=>Object.assign({},w,{stamp:stampPlain(w.tab),ver:(window.APP&&APP.ver)||''}));
@@ -6432,7 +6464,8 @@ const INTERACTIVE_REPORTS=[
   {id:'covDoctor',name:'Доктор покрытия',tab:'plan',crit:{filter:1,drill:1,live:1,insight:1,export:1},note:'3.36: фильтры подразделения/минимума/режима, детализация до кандидата и дня, живой пересчёт, вывод-календарь дефицитов, экспорт CSV со штампом'},
   {id:'rotWhatIf',name:'What-if ротации',tab:'plan',crit:{filter:1,drill:1,live:1,insight:1,export:1},note:'3.37: фильтры шаблон/подразделение/минимум, детализация до сценария B, живой пересчёт, оптимум-вывод, CSV со штампом'},
   {id:'brigYear',name:'Годовой баланс бригад',tab:'plan',crit:{filter:1,drill:1,live:1,insight:1,export:1},note:'3.37: фильтр-год, детализация до бригады и сотрудника, живой пересчёт, вывод по конфликтам/SD, CSV, действие-ребаланс'},
-  {id:'bolap',name:'OLAP бюджета',tab:'an',crit:{filter:1,drill:1,live:1,insight:1,export:1},note:'3.50: фильтры год/мера, drill-click ячейки к лимитам месяца, живой пересчёт, подсветка перерасхода, CSV со штампом'}];
+  {id:'bolap',name:'OLAP бюджета',tab:'an',crit:{filter:1,drill:1,live:1,insight:1,export:1},note:'3.50: фильтры год/мера, drill-click ячейки к лимитам месяца, живой пересчёт, подсветка перерасхода, CSV со штампом'},
+  {id:'brigolap',name:'OLAP бригад и покрытия',tab:'an',crit:{filter:1,drill:1,live:1,insight:1,export:1},note:'3.52: фильтры год/мера, drill-click к годовому балансу бригады, живой пересчёт, подсветка конфликтов, CSV со штампом'}];
 function reportClass(r){
   const c=r.crit||{},n=['filter','drill','live','insight','export'].filter(k=>c[k]).length;
   return n===5?'интерактивный':n>=3?'частично интерактивный':'просмотрный (статичный)';
@@ -11400,6 +11433,7 @@ function budgetSet(y,m,deptId,val){
   b[mk]=b[mk]||{};
   if(val==null||val==='')delete b[mk][deptId];else b[mk][deptId]=Math.round(+val)||0;
   save(true);
+  try{budgetsTsSet(mk,Date.now())}catch(e){}   /* 3.53: ts для merge с сервером */
   audit('Лимит бюджета ФОТ',`${(dept(deptId)||{}).name||deptId} · ${MUP[m-1]} ${y}: ${val==null||val===''?'снят':fmtStd(+val,{unit:'₽'})}`,'budgets');
   try{teleHit('budget:set')}catch(e){}
   renderBudgets();renderBudgetNag();
@@ -12193,7 +12227,7 @@ async function brigadesPush(){
       brigadeList().forEach(b=>{b.ts=b.ts||Date.now()});save(true);
       logAct('Бригады','выгружены на сервер ('+j.saved+' из '+j.total+')');
       try{teleHit('brig:push')}catch(e){}
-      toast('Бригады на сервере: обновлено '+fmtStd(j.saved)+' из '+fmtStd(j.total),'ok');
+      toast('Бригады на сервере: обновлено '+fmtStd(j.saved)+' из '+fmtStd(j.total)+(j.quotaLeft!=null?' · остаток квоты часа: '+fmtStd(j.quotaLeft):''),'ok');
       return j.saved;
     }
     toast('Сервер отклонил бригады: '+(j.err||(j.errors||[]).map(e=>e.err).join('; ')||'HTTP '+r.status),'err');
@@ -12319,6 +12353,156 @@ function opsCacheReplay(){
   audit('Воспроизведение офлайн-очереди',fmtStd(n,{unit:'оп'})+' поставлено в операционный протокол','ops');
   toast('Офлайн-очередь воспроизведена: '+fmtStd(n,{unit:'оп'})+(wsOn()?' — уходит на сервер':' — уйдёт после реконнекта'),'ok');
   return n;
+}
+
+/* ================= 3.52: OLAP БРИГАД И ПОКРЫТИЯ =================
+   Срез «бригада × месяц» за год: чел·дн дежурств, часы, дни выхода на дежурство,
+   конфликты с пожеланиями «не ставить»; меры переключаемы, drill-click открывает
+   годовой баланс бригады; CSV со штампом. */
+const BRIGOLAP_MEAS=[['duty','Чел·дн дежурств'],['hours','Часы дежурств'],['daysOn','Дней на дежурстве'],['conflicts','Конфликты с «не ставить»']];
+function brigOlap(year){
+  const bl=brigadeList().filter(b=>patById(b.patId));
+  const rows=bl.map(b=>{
+    const pat=patById(b.patId);
+    const anchor=addDays(b.anchor||`${year}-01-01`,-(b.offset||0));
+    const members=(b.members||[]).map(id=>emp(id)).filter(e=>e&&!e.fired);
+    const cells=[];
+    const T={duty:0,hours:0,daysOn:0,conflicts:0};
+    for(let m=1;m<=12;m++){
+      const DIM=dim(year,m);
+      const cell={duty:0,hours:0,daysOn:0,conflicts:0};
+      for(let d=1;d<=DIM;d++){
+        const c=patternCodeAt(pat,anchor,year,m,d);
+        if(!c)continue;
+        const dk=k(year,m,d);
+        let on=0,conf=0;
+        members.forEach(e=>{
+          if(wishBlock(e.id,dk)){conf++;return}
+          on++;
+        });
+        if(on>0){cell.daysOn++;cell.duty+=on;cell.hours+=on*patternHours(c)}
+        cell.conflicts+=conf;
+      }
+      ['duty','hours','daysOn','conflicts'].forEach(kk=>{T[kk]+=cell[kk]});
+      cells.push(cell);
+    }
+    return{brig:b,pat,members:members.length,cells,T};
+  });
+  return{year,rows};
+}
+function renderBrigOlap(){
+  const box=$('brigolapBox');if(!box)return;
+  const y=+$('brigolapYear')?+$('brigolapYear').value:cur.y;
+  const meas=$('brigolapMeas')?$('brigolapMeas').value:'duty';
+  const ol=brigOlap(y);
+  if(!ol.rows.length){box.innerHTML='<div class="hint">Сохранённых бригад с живыми шаблонами нет — создайте в мастере ротаций (веер по бригадам).</div>';return}
+  const head='<thead><tr><th>Бригада</th>'+MUP.map(mm=>`<th class="n">${mm.slice(0,3)}</th>`).join('')+'<th class="n">Год</th></tr></thead>';
+  const body=ol.rows.map(r=>{
+    const cells=r.cells.map((cl,mi)=>{
+      const v=meas==='hours'?Math.round(cl.hours):cl[meas];
+      const hot=meas==='conflicts'&&v>0;
+      const ttl=MUP[mi]+' '+y+': '+fmtStd(cl.duty,{unit:'чел·дн'})+', '+fmtStd(Math.round(cl.hours),{unit:'ч'})+', дней '+fmtStd(cl.daysOn)+(cl.conflicts?', конфликтов '+fmtStd(cl.conflicts):'');
+      return '<td class="n" data-brigolap="'+r.brig.id+':'+mi+'"'+(hot?' style="color:var(--red);font-weight:700"':'')+' title="'+ttl+'">'+(v?fmtStd(v):'—')+'</td>';
+    }).join('');
+    const tv=meas==='hours'?Math.round(r.T.hours):r.T[meas];
+    return '<tr><td><b>'+esc(r.brig.name)+'</b><div class="hint">'+fmtStd(r.members,{unit:'чел'})+' · фаза '+fmtStd(r.brig.offset||0,{unit:'дн'})+'</div></td>'+cells+'<td class="n"><b>'+fmtStd(tv)+'</b></td></tr>';
+  }).join('');
+  box.innerHTML='<div class="scroll-x"><table class="rtbl" role="table" aria-label="OLAP бригад '+y+': мера — '+esc((BRIGOLAP_MEAS.find(x=>x[0]===meas)||[])[1]||'')+'">'+head+'<tbody>'+body+'</tbody></table></div>'+
+    '<div class="hint" style="margin-top:6px">Значения за месяц по выбранной мере; красный — конфликты с пожеланиями «не ставить»; в title — полная сводка месяца; клик по ячейке открывает годовой баланс бригады.</div>';
+  box.querySelectorAll('[data-brigolap]').forEach(td=>td.onclick=()=>{
+    try{teleHit('brigolap:drill')}catch(e){}
+    openBrigadeYear(y);
+  });
+}
+function brigOlapCsvDl(){
+  const y=+$('brigolapYear')?+$('brigolapYear').value:cur.y;
+  const ol=brigOlap(y);
+  if(!ol.rows.length){toast('Нет бригад для выгрузки','err');return}
+  const rows=[['OLAP бригад',String(y),'штамп',stampPlain('an')],[],
+    ['Бригада','Месяц','Чел·дн дежурств','Часы','Дней на дежурстве','Конфликты с «не ставить»']];
+  ol.rows.forEach(r=>r.cells.forEach((cl,mi)=>rows.push([r.brig.name,MUP[mi],cl.duty,Math.round(cl.hours),cl.daysOn,cl.conflicts])));
+  downloadCsv('olap-brigad-'+y+'.csv',rows);
+  audit('Выгрузка OLAP бригад',`${y} · CSV`,'brigades');
+  try{teleHit('brigolap:csv')}catch(e){}
+  toast('OLAP бригад выгружен в CSV','ok');
+}
+
+/* ================= 3.53: КЛИЕНТ СЕРВЕРНОГО КОНТУРА БЮДЖЕТОВ =================
+   GET/PUT /api/v1/budgets: выгрузка и подтягивание лимитов ФОТ; merge по месяцам
+   с last-write-wins по ts; авто-подтягивание при WS-событии {type:'budgets'}. */
+function budgetsTsGet(mk){return ((state.budgetsTs||{})[mk])||0}
+function budgetsTsSet(mk,ts){state.budgetsTs=state.budgetsTs||{};state.budgetsTs[mk]=ts}
+function budgetItemsOut(){
+  const out={};
+  Object.keys(budgets()).forEach(mk=>{
+    const lim=budgets()[mk];
+    if(!lim||!Object.keys(lim).length)return;
+    out[mk]=Object.assign({},lim,{ts:budgetsTsGet(mk)||0});
+  });
+  return out;
+}
+async function budgetsPush(){
+  if(!/^https?:$/.test(location.protocol)){toast('Выгрузка бюджетов на сервер доступна при работе по HTTP (сервер ЛВС)','err');return 0}
+  try{
+    const hd={'Content-Type':'application/json'};if(wsToken())hd.Authorization='Bearer '+wsToken();
+    const r=await fetch('api/v1/budgets',{method:'PUT',headers:hd,body:JSON.stringify({items:budgetItemsOut()})});
+    const j=await r.json();
+    if(j.ok){logAct('Бюджеты','выгружены на сервер ('+j.saved+' мес. из '+j.total+')');
+      try{teleHit('budget:push')}catch(e){}
+      toast('Лимиты ФОТ на сервере: месяцев '+fmtStd(j.saved)+' из '+fmtStd(j.total),'ok');
+      return j.saved;
+    }
+    toast('Сервер отклонил бюджеты: '+(j.err||(j.errors||[]).map(e=>e.err||JSON.stringify(e)).join('; ')||'HTTP '+r.status),'err');
+    return 0;
+  }catch(e){toast('Сервер ЛВС недоступен: '+String(e.message||e).slice(0,100),'err');return 0}
+}
+async function budgetsPull(){
+  if(!/^https?:$/.test(location.protocol)){toast('Доступно при работе по HTTP (сервер ЛВС)','err');return 0}
+  try{
+    const r=await fetch('api/v1/budgets'+(wsToken()?'?token='+encodeURIComponent(wsToken()):''),{cache:'no-store'});
+    const j=await r.json();
+    if(!j.ok){toast('Ответ сервера: '+(j.err||'HTTP '+r.status),'err');return 0}
+    let ch=0;
+    Object.keys(j.items||{}).forEach(mk=>{
+      const rec=j.items[mk];
+      if(!rec||!rec.limits)return;
+      if((rec.ts||0)>budgetsTsGet(mk)){
+        budgets()[mk]=Object.assign({},rec.limits);
+        budgetsTsSet(mk,rec.ts||0);
+        ch++;
+      }
+    });
+    if(ch){save(true);try{renderBudgets();renderBudgetNag()}catch(e){}}
+    try{teleHit('budget:pull')}catch(e){}
+    toast(ch?'Лимиты ФОТ с сервера: месяцев обновлено '+fmtStd(ch):'Лимиты ФОТ с сервера: новых версий нет','ok');
+    return ch;
+  }catch(e){toast('Сервер ЛВС недоступен: '+String(e.message||e).slice(0,100),'err');return 0}
+}
+
+/* ================= 3.54: ОФЛАЙН-КЭШ ПОЛНЫХ ПУБЛИКАЦИЙ =================
+   Полная публикация канона (справочники, документы, undo — всё, что не покрыто
+   точечными ops) офлайн откладывается: save() ставит флаг pt.pub.pending;
+   при реконнекте (WS onopen) публикация уходит автоматически. */
+function pubPendingGet(){try{return localStorage.getItem('pt.pub.pending')==='1'}catch(e){return false}}
+function pubPendingSet(on){try{on?localStorage.setItem('pt.pub.pending','1'):localStorage.removeItem('pt.pub.pending')}catch(e){}pubPendingBadge()}
+function pubPendingSetTrue354(){pubPendingSet(true)}
+function pubPendingBadge(){
+  const n=pubPendingGet();
+  const el=$('pubPendingPill');
+  if(el){el.style.display=n?'':'none';el.textContent='📦 публикация ждёт сети'}
+  return n;
+}
+function pubPendingFlush(){
+  if(!pubPendingGet()){toast('Отложенных публикаций нет','ok');return 0}
+  if(!wsOn()||!opsActive()){toast('Сети нет — публикация останется отложенной','err');return 0}
+  pubPendingSet(false);
+  try{
+    wsPublish(false);
+    audit('Полная публикация после офлайна','автопри реконнекте (3.54)','ops');
+    try{teleHit('pub:offline')}catch(e){}
+    toast('Отложенная полная публикация отправлена на сервер','ok');
+  }catch(e){pubPendingSet(true);toast('Публикация не удалась: '+String(e.message||e),'err');return 0}
+  return 1;
 }
 
 /* ------------------------------- 9. СВОДНАЯ ОТРИСОВКА И ИНИЦИАЛИЗАЦИЯ ------------------------------- */
@@ -16028,6 +16212,8 @@ function initEvents(){
   bindClick('btnPatJson',patternsJsonDl);
   bindClick('btnPatCsv',patternsCsvDl);                  /* 3.36 */
   bindClick('btnBudgetCsv',budgetsCsvDl);                /* 3.39 */
+  bindClick('btnBudgetPush',budgetsPush);                /* 3.53 */
+  bindClick('btnBudgetPull',budgetsPull);                /* 3.53 */
   bindClick('btnSwapOpen',openSwapOpenReq);   /* 3.42 */
   bindClick('btnFcCsv',forecastAbsCsvDl);     /* 3.43 */
   try{
@@ -16035,6 +16221,11 @@ function initEvents(){
     const bm=$('bolapMeas');if(bm){bm.innerHTML=BOLAP_MEAS.map(x=>`<option value="${x[0]}">${esc(x[1])}</option>`).join('');bm.onchange=()=>renderBudgetOlap()}
   }catch(e){}
   bindClick('btnBolapCsv',budgetOlapCsvDl);   /* 3.50 */
+  try{
+    const byy=$('brigolapYear');if(byy){byy.innerHTML=Array.from({length:YMAX-YMIN+1},(_,i)=>`<option ${YMIN+i===cur.y?'selected':''}>${YMIN+i}</option>`).join('');byy.onchange=()=>renderBrigOlap()}
+    const bm2=$('brigolapMeas');if(bm2){bm2.innerHTML=BRIGOLAP_MEAS.map(x=>`<option value="${x[0]}">${esc(x[1])}</option>`).join('');bm2.onchange=()=>renderBrigOlap()}
+  }catch(e){}
+  bindClick('btnBrigOlapCsv',brigOlapCsvDl);  /* 3.52 */
   bindClick('btnOrderNew',()=>openOrderConstructor());   /* 3.44 */
   bindClick('btnPerfTabs',()=>perfMeasureTabs());        /* 3.46 */
   bindClick('btnPerfScale',()=>demoScale(1000));         /* 3.46 */
@@ -16248,6 +16439,7 @@ async function boot(){
   try{initMeNotify()}catch(e){}   /* 3.40: личный дайджест */
   try{renderCertForecast()}catch(e){}   /* 3.41: прогноз допусков */
   try{a11yInit()}catch(e){}   /* 3.45: a11y-инициализация */
+  try{pubPendingBadge();opsCacheBadge()}catch(e){}   /* 3.51/3.54: пиллы очередей */
   try{renderPerfCard()}catch(e){}   /* 3.46: профилирование */
   p1Init();p2Init();
   installRoleGuards();applyRoleUi();
@@ -16329,7 +16521,7 @@ async function boot(){
     sigJournalList,sigJournalAdd,sigJournalMerge,sigAckUpdate,sigAckSend,unackedSigs,updateSigBadge,openSigJournal,sigTestLocal,sigWho,
     renderBoard,kanbanRefresh,renderNetAdmin,openPermsMatrix,
     renderMyMonth,meEmp,meSetEmp,meMonthStat,meMk,meNav,printMeMonth,printSigSheet,sigSheetHtml,
-    sigCfg,playSignal,sigNotify,geoPrev,ver:'3.51',
+    sigCfg,playSignal,sigNotify,geoPrev,ver:'3.55',
     /* ===== 3.19: интерфейс и доступность ===== */
     uiPrefs,setUiPref,uiThemeMode,applyUi,cycleTheme,initUiUx,systemMotionOk,
     get THEME_NAMES(){return THEME_NAMES},
@@ -16407,6 +16599,12 @@ async function boot(){
     get BOLAP_MEAS(){return BOLAP_MEAS},budgetOlap,bolapVal,renderBudgetOlap,budgetOlapCsvDl,
     /* ===== 3.51: офлайн-кэш операций ===== */
     opsCacheKey,opsCacheLoad,opsCacheSave,opsCacheAdd,opsCacheClear,opsCacheBadge,opsCacheReplay,
+    /* ===== 3.52: OLAP бригад ===== */
+    get BRIGOLAP_MEAS(){return BRIGOLAP_MEAS},brigOlap,renderBrigOlap,brigOlapCsvDl,
+    /* ===== 3.53: клиент бюджетов ===== */
+    budgetsTsGet,budgetsTsSet,budgetItemsOut,budgetsPush,budgetsPull,
+    /* ===== 3.54: офлайн-кэш полных публикаций ===== */
+    pubPendingGet,pubPendingSet,pubPendingBadge,pubPendingFlush,
     /* ===== 3.37: сценарии ротаций и годовой баланс ===== */
     rotWhatIf,whatIfCsvDl,openWizardPreset,openRotWhatIf,
     brigadeYearSim,brigadeYearCsvDl,brigadeRebalance,brigadeRebalanceApply,openBrigadeYear,
@@ -16728,7 +16926,7 @@ function mgrSlidesHtml(){
   const n2=v=>parseFloat(String(v==null?0:v).replace(',','.'))||0;
   const overDuty=dutyRows.slice().sort((a,b)=>n2(b[2])-n2(a[2])).slice(0,10);
   const stamp=esc(stampPlain('rep'));
-  const ver=(window.APP&&APP.ver)||'3.51';
+  const ver=(window.APP&&APP.ver)||'3.55';
   const foot='<footer>'+esc(state.org)+' · '+esc(MUP[m-1])+' '+y+' · '+stamp+'</footer>';
   const kpi=(t,v,d)=>'<div class="kpi"><div class="kt">'+t+'</div><div class="kv">'+v+'</div><div class="kd">'+d+'</div></div>';
   const tbl=(head,rows)=>'<table><thead><tr>'+head.map(h=>'<th>'+esc(h)+'</th>').join('')+'</tr></thead><tbody>'
@@ -17118,8 +17316,12 @@ function paletteBaseItems(){
     {ic:'🧪',title:'Саудит состава поезда',hint:'диагностика · 3.48',run:()=>openSelfAudit()},
     {ic:'⇪',title:'Бригады на сервер ЛВС',hint:'синхронизация · 3.49',run:()=>{showTab('plan');setTimeout(()=>brigadesPush(),250)}},
     {ic:'⇩',title:'Бригады с сервера ЛВС',hint:'синхронизация · 3.49',run:()=>{showTab('plan');setTimeout(()=>brigadesPull(),250)}},
+    {ic:'💰',title:'Бюджеты ФОТ на сервер ЛВС',hint:'синхронизация · 3.53',run:()=>{showTab('data');setTimeout(()=>budgetsPush(),250)}},
+    {ic:'💰',title:'Бюджеты ФОТ с сервера ЛВС',hint:'синхронизация · 3.53',run:()=>{showTab('data');setTimeout(()=>budgetsPull(),250)}},
     {ic:'💠',title:'OLAP бюджета: подразделение × месяц',hint:'аналитика · 3.50',run:()=>{showTab('an');setTimeout(()=>{const c=$('bolapBox');if(c&&c.scrollIntoView)c.scrollIntoView({behavior:'smooth',block:'center'});renderBudgetOlap()},300)}},
+    {ic:'🧿',title:'OLAP бригад и покрытия: бригада × месяц',hint:'аналитика · 3.52',run:()=>{showTab('an');setTimeout(()=>{const c=$('brigolapBox');if(c&&c.scrollIntoView)c.scrollIntoView({behavior:'smooth',block:'center'});renderBrigOlap()},300)}},
     {ic:'📴',title:'Офлайн-очередь операций: воспроизвести',hint:'синхронизация · 3.51',run:()=>opsCacheReplay()},
+    {ic:'📦',title:'Отложенная полная публикация: отправить сейчас',hint:'синхронизация · 3.54',run:()=>pubPendingFlush()},
     {ic:'📊',title:'Бюджет ФОТ: выгрузка CSV',hint:'экспорт · 3.39',run:()=>budgetsCsvDl()},
     {ic:'📲',title:'Установить приложение (PWA-lite)',hint:'мобильное · 3.38',run:()=>openInstallHint()},
     {ic:'👉',title:'Следующий месяц (свайп)',hint:'навигация · 3.38',run:()=>swipeMonth(1)},
@@ -17393,10 +17595,10 @@ function renderModules(){
   box.querySelectorAll('[data-mod]').forEach(ch=>ch.onchange=()=>toggleModule(ch.dataset.mod,ch.checked));
 }
 const ROLE_PERM={
-  admin:{edit:1,admin:1,staff:1,import:1,sign:1,chat:1},
-  hr:{edit:1,staff:1,import:1,sign:1,chat:1},    /* кадровик: штатка, приказы, импорт базы — без статусов периодов */
-  editor:{edit:1,chat:1},                        /* редактор: правка данных */
-  tab:{edit:1,planOnly:1,chat:1},                /* табельщик: план и факт, без справочников и импорта */
+  admin:{edit:1,admin:1,staff:1,import:1,sign:1,chat:1,brig:1,budget:1},
+  hr:{edit:1,staff:1,import:1,sign:1,chat:1,brig:1,budget:1},    /* кадровик: штатка, приказы, импорт базы — без статусов периодов */
+  editor:{edit:1,chat:1,brig:1},                        /* редактор: правка данных + бригады (3.55) */
+  tab:{edit:1,planOnly:1,chat:1,brig:1},                /* табельщик: план и факт + бригады (3.55) */
   viewer:{chat:1}                                /* наблюдатель: чтение + мессенджер (3.17: chat можно запретить персонально) */
 };
 const ROLE_NAMES={admin:'администратор',hr:'кадровик',editor:'редактор',tab:'табельщик',viewer:'наблюдатель'};
@@ -17560,6 +17762,7 @@ function wsConnect(url,auto){
   renderWsSync();
   PT_WS.onopen=()=>{
     try{if(opsCacheLoad().length)setTimeout(()=>opsCacheReplay(),400);opsCacheBadge()}catch(e){}   /* 3.51: реконнект воспроизводит офлайн-очередь */
+    try{if(pubPendingGet())setTimeout(()=>pubPendingFlush(),900);pubPendingBadge()}catch(e){}   /* 3.54: отложенная полная публикация */
     PT_WS_RETRY=0;
     flushChatQueue();renderChatQueueHint();
     state.settings.wsUrl=url;save();
@@ -17614,6 +17817,10 @@ function wsConnect(url,auto){
       toastSticky('🚨 Сигнал оповещения ('+(m.sev==='crit'?'критичный':'предупреждение')+'): '+String(m.text).slice(0,140)+(m.by?' · от '+m.by:'')+' · id '+String(ent.sid).slice(0,10),
         m.sev==='crit'?'err':'ok',{label:'✓ Ознакомлен',fn:()=>sigAckSend(ent.sid)});
       try{sigNotify(m)}catch(e){}
+      return;
+    }
+    if(m.type==='budgets'){   /* 3.53: серверные лимиты ФОТ обновились — подтягиваем merge'ом */
+      try{budgetsPull()}catch(e){}
       return;
     }
     if(m.type==='brigades'){   /* 3.49: серверный справочник бригад обновился — подтягиваем merge'ом */
