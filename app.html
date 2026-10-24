@@ -6,7 +6,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>План-табель служебной деятельности · WFM 3.41</title>
+<title>План-табель служебной деятельности · WFM 3.48</title>
 <meta name="description" content="Планирование служебной деятельности, табель учёта рабочего времени (Т-13), дежурства, производственный календарь 2010–2035, аналитика загруженности, импорт PDF/CSV, экспорт Excel.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -576,6 +576,16 @@ body.printing .tbl-wrap,body.printing .gantt,body.printing .abst-wrap,body.print
 .pwcell em{display:block;font-style:normal;font-size:8.5px;color:var(--mut)}
 .pwcell.off{background:var(--soft2);color:var(--mut)}
 .pwcell.today{border-color:var(--navy);box-shadow:0 0 0 2px color-mix(in srgb,var(--navy) 22%,transparent)}
+/* ===== 3.45: высокий контраст и.skip-link ===== */
+html[data-contrast="hc"]{--line:#5b6b88;--line2:#8a97ad;--mut:#33415c}
+html[data-contrast="hc"][data-theme="dark"]{--line:#93a6c9;--line2:#7688a8;--mut:#cdd8ea}
+html[data-contrast="hc"] .btn,html[data-contrast="hc"] .inp,html[data-contrast="hc"] .card{border-width:2px}
+html[data-contrast="hc"] :focus-visible{outline:3px solid var(--amber)!important;outline-offset:2px}
+html[data-contrast="hc"] a{text-decoration:underline}
+html[data-contrast="hc"] .hint{color:var(--mut)}
+.skip-link{position:absolute;left:-9999px;top:0;background:var(--navy);color:#fff;padding:8px 14px;z-index:100;border-radius:0 0 8px 0;font-size:12px}
+.skip-link:focus{left:0}
+
 /* ===== 3.38: мобильная волна ===== */
 .mobi-nav{display:none}
 body.mobile{padding-bottom:58px}
@@ -1184,6 +1194,7 @@ html[data-theme=dark] body.cvd{--viz1:#56B4E9;--viz2:#009E73;--viz3:#E69F00;--vi
   </div>
   <div class="dgrid" style="grid-template-columns:1fr 1fr">
     <div class="card">
+      <button class="btn ghost small" id="btnSwapOpen" style="float:right" title="Открытая заявка без напарника: партнёра подберёт автоподбор (3.42)">＋ Открытая заявка</button>
       <h3>Обмен сменами и подмены<span class="sub">маршрут: создана → согласие напарника → решение руководителя → применено к плану</span></h3>
       <div class="frow" style="margin-bottom:8px">
         <div class="field" style="margin:0"><label>Показывать</label><select id="swapFilter" class="inp">
@@ -1350,6 +1361,11 @@ html[data-theme=dark] body.cvd{--viz1:#56B4E9;--viz2:#009E73;--viz3:#E69F00;--vi
     <div class="card"><h3>Теплокарта: подразделение × день недели<span class="sub">3.24 · последовательная палитра, нормировка по максимуму; средний коэффициент нагрузки</span></h3><div id="anHeat"></div></div>
   </div>
   <div class="card" style="margin-top:12px"><h3>Корреляционная матрица категорий отсутствий<span class="sub">3.24 · Пирсон по «сотрудник × день» открытого месяца; расходящаяся палитра −1…+1</span></h3><div id="anCorr"></div></div>
+  <div class="card" style="margin-top:12px"><h3>Прогноз отсутствий с ДИ 95 %<span class="sub">3.43 · линейный тренд по истории месяцев · интервал прогноза ±1,96·SD·√(1+1/n)</span></h3>
+    <div class="frow no-print"><div class="field" style="margin:0;max-width:260px"><label>Подразделение</label><select class="inp" id="fcDept"><option value="all">все подразделения</option></select></div>
+    <div class="field" style="margin:0;align-self:end"><button class="btn ghost small" id="btnFcCsv">⇩ CSV прогноза</button></div></div>
+    <div id="fcBox" style="margin-top:8px"></div>
+  </div>
   <div class="card" style="margin-top:12px"><h3>OLAP-срез: произвольные измерения<span class="sub">3.32 · строки, колонки и мера выбираются оператором; ступенчатая палитра, итоги по строкам и колонкам</span></h3>
     <div class="ptool no-print" style="margin-bottom:8px;flex-wrap:wrap">
       <label class="lbl" for="olapRow" style="margin:0">Строки</label><select class="inp" id="olapRow" style="width:auto"></select>
@@ -1380,6 +1396,11 @@ html[data-theme=dark] body.cvd{--viz1:#56B4E9;--viz2:#009E73;--viz3:#E69F00;--vi
   </div>
   <div class="dgrid" style="grid-template-columns:340px 1fr">
     <div class="card no-print">
+      <h3>Конструктор приказов<span class="sub">3.44 · шаблоны с плейсхолдерами · источники: отпуска, дежурства, произвольный текст · .txt и .docx</span></h3>
+      <div id="orderBox" class="hint"></div>
+      <button class="btn small" id="btnOrderNew" style="margin-top:8px">📜 Открыть конструктор приказов</button>
+      </div>
+      <div class="card">
       <h3>Конструктор отчёта</h3>
       <div class="field"><label>Форма отчёта</label><select id="repType">
         <option value="t13">Табель Т-13 (свод по подразделению)</option>
@@ -1729,6 +1750,22 @@ html[data-theme=dark] body.cvd{--viz1:#56B4E9;--viz2:#009E73;--viz3:#E69F00;--vi
       <div id="delegBox" style="margin-top:8px"></div>
     </div>
     <div class="card">
+      <h3>Паспорта данных и обезличенный экспорт<span class="sub">3.47 · линии данных: источник → потребители → хранение → retention</span></h3>
+      <div class="mini" style="display:flex;gap:6px;flex-wrap:wrap">
+        <button class="btn ghost small" id="btnLineage">🛂 Паспорта данных</button>
+        <button class="btn ghost small" id="btnAnon">⤓ Обезличенный канон (JSON)</button>
+      </div>
+      <div class="hint" style="margin-top:6px">Обезличивание: ФИО → «Сотрудник NNNN», табельные → T-9xxx, должности → «должность N», организация и подразделения обезличиваются; имена вычищаются из журнала аудита и обратной связи.</div>
+      </div>
+      <div class="card">
+      <h3>Профилирование и нагрузка<span class="sub">3.46 · метки запуска, замеры операций, кэши, нагрузочный профиль</span></h3>
+      <div id="perfBox"></div>
+      <div class="mini" style="margin-top:8px;display:flex;gap:6px">
+        <button class="btn ghost small" id="btnPerfTabs">⏱ Замерить вкладки</button>
+        <button class="btn ghost small" id="btnPerfScale">🏋 Профиль 1000 сотрудников</button>
+      </div>
+      </div>
+      <div class="card">
       <h3>Статус хранилища</h3>
       <div id="storeInfo" class="hint"></div>
       <div class="mini" style="margin-top:9px">
@@ -1817,6 +1854,10 @@ html[data-theme=dark] body.cvd{--viz1:#56B4E9;--viz2:#009E73;--viz3:#E69F00;--vi
       </div>
       <div class="card" style="margin-top:12px" id="uiCard">
         <h3>Интерфейс<span class="sub">тема · масштаб · плотность таблиц — настройки этого рабочего места</span></h3>
+        <div class="setrow" style="flex-wrap:wrap;gap:6px">
+          <label class="chkrow" style="margin:0"><input type="checkbox" id="setContrast"> высокий контраст (3.45)</label>
+          <span class="hint">усиленные границы карточек/кнопок, жирные фокус-кольца, подчёркнутые ссылки — персонально для этого рабочего места</span>
+        </div>
         <div class="frow3">
           <div class="field" style="margin:0"><label>Тема оформления</label>
             <select class="inp" id="uiTheme">
@@ -1976,7 +2017,7 @@ html[data-theme=dark] body.cvd{--viz1:#56B4E9;--viz2:#009E73;--viz3:#E69F00;--vi
 
 <div class="ovl" id="modal" hidden><div class="mdl" id="modalBox"></div></div>
 <button id="toTop" class="no-print" title="Наверх" aria-label="Прокрутить страницу наверх">↑</button>
-<div id="toastBox"></div>
+<div id="toastBox" role="status" aria-live="polite"></div>
 
 <script>
 
@@ -3302,6 +3343,8 @@ function applyUi(){
   const p=uiPrefs(),mode=uiThemeMode();
   const dark=mode==='dark'||(mode==='auto'&&systemDark());
   document.documentElement.dataset.theme=dark?'dark':'light';
+  try{document.documentElement.dataset.contrast=uiPrefs().contrast?'hc':''}catch(e){}   /* 3.45: высокий контраст */
+try{const scx=$('setContrast');if(scx)scx.checked=!!uiPrefs().contrast}catch(e){}   /* 3.45: синхронизация флажка */
   const b=$('btnTheme');
   if(b){b.textContent=mode==='auto'?'🌗':(dark?'☀':'◐');
     b.title='Тема: '+(mode==='auto'?'как в системе':(dark?'тёмная':'светлая'))+' — клик переключает (светлая → тёмная → как в системе)';}
@@ -3500,6 +3543,46 @@ function showHelp(){
     <div>
       <div class="lbl">Назначение</div>
       <p class="hint" style="margin-top:6px">Приложение для планирования служебной деятельности подразделений на месяц и ведения табеля учёта рабочего времени (форма Т-13) с расчётом коэффициентной нагрузки, контролем норм ТК РФ, распределением дежурств и аналитикой отсутствий за неделю / месяц / квартал / год.</p>
+      <div class="lbl" style="margin-top:12px">Новое в версии 3.48 — консолидация поезда</div>
+      <ul class="hint" style="margin:6px 0 18px;line-height:1.6">
+        <li><b>Карта фич 3.36–3.48</b> («🗺»): 13 версий поезда — тема, ключевые фичи, объём тестов; выгрузка карты в JSON; ссылки на релиз-ноты файлов РЕЛИЗ-WFM-3.xx.md.</li>
+        <li><b>Саудит состава</b> («🧪»): 17 маркерных проверок наличия функций каждой версии поезда в текущей сборке; зелёная сводка или список отсутствующего; телеметрия train:audit.</li>
+        <li><b>Единый CI</b>: <code>bash tests/ci-all.sh</code> гоняет регрессы 3.36/3.37, поезд 3.38–3.45 и смоуки 3.46–3.48 на онлайн-сборках плюс смоуки на офлайн-сборке финала (3.48-offline).</li>
+      </ul>
+      <div class="lbl" style="margin-top:12px">Новое в версии 3.47 — паспорта данных и обезличенный экспорт</div>
+      <ul class="hint" style="margin:6px 0 18px;line-height:1.6">
+        <li><b>Реестр линий данных</b> («🛂 Паспорта данных», Данные): 13 наборов — план, факт, штатка, отпуска, обмены, допуски, бюджеты, бригады, шаблоны приказов, пожелания, аудит, телеметрия, журнал обмена; для каждого: источник, потребители, место хранения и retention.</li>
+        <li><b>Обезличенный экспорт канона</b>: ФИО → «Сотрудник NNNN», табельные → T-9xxx, должности и организации обезличиваются; имена вычищаются из журнала аудита, обратной связи и пожеланий; метка <code>__anon</code> с параметрами; аудит и телеметрия <code>data:anon</code>.</li>
+      </ul>
+      <div class="lbl" style="margin-top:12px">Новое в версии 3.46 — волна производительности</div>
+      <ul class="hint" style="margin:6px 0 18px;line-height:1.6">
+        <li><b>Профилирование</b> (Данные → «Профилирование и нагрузка»): метки запуска (boot:start, state:loaded, first:render, calendar:verified), таблица суммарных затрат по операциям, состояние кэшей (статистика/OLAP/годовая аналитика); «⏱ Замерить вкладки» проходит все 15 разделов с замером каждого.</li>
+        <li><b>Быстрее запуск</b>: сверка производственного календаря 2010–2035 убрана из критического пути запуска в фон (+1,5 с), метка calendar:verified после завершения.</li>
+        <li><b>Нагрузочный профиль</b>: «🏋 Профиль 1000 сотрудников» — детерминированная генерация штата (mulberry32, сид 42) с лёгким планом; время генерации и перерисовки фиксируется в профилировщике и аудите; телеметрия perf:scale.</li>
+      </ul>
+      <div class="lbl" style="margin-top:12px">Новое в версии 3.45 — доступность, волна 2</div>
+      <ul class="hint" style="margin:6px 0 18px;line-height:1.6">
+        <li><b>Высокий контраст</b>: персональный режим (Справочники → Интерфейс или палитра «🌓») — усиленные границы, жирные фокус-кольца :focus-visible, подчёркнутые ссылки; работает в светлой и тёмной теме.</li>
+        <li><b>Карта клавиатурных сокращений</b> («⌨» в палитре): 16 сочетаний от F1–F7 и Ctrl+K до клавиатурного режима сетки и свайпов; цикл фокуса в модалках и aria-live тостов объявлены явно.</li>
+        <li><b>Skip-link</b> «Пропустить к навигации по разделам» (виден с клавиатуры по фокусу) и role="grid" + aria-имена у сеток плана и дежурств (обновляются при перерисовке).</li>
+      </ul>
+      <div class="lbl" style="margin-top:12px">Новое в версии 3.44 — конструктор приказов</div>
+      <ul class="hint" style="margin:6px 0 18px;line-height:1.6">
+        <li><b>Реестр шаблонов приказов</b> (Отчёты → «Конструктор приказов»): три встроенных шаблона (отпуска, дежурства, произвольный) с плейсхолдерами <code>{{ORG}} {{NUM}} {{DATE}} {{PERIOD}} {{ROWS}} {{TEXT}}</code>; тело шаблона редактируется и сохраняется в каноне (<code>state.orderTpls</code>).</li>
+        <li><b>Источники строк</b>: утверждённые заявки отпусков года или дежурства месяца (с фильтром подразделения) — строки «{{ROWS}}» формируются автоматически; предпросмотр обновляется на каждом вводе.</li>
+        <li><b>Экспорт</b>: .txt всегда; .docx — при доступном JSZip (офлайн-сборка), иначе подсказка; аудит выгрузок и сохранений, телеметрия <code>order:ui</code>.</li>
+      </ul>
+      <div class="lbl" style="margin-top:12px">Новое в версии 3.43 — прогнозы отсутствий с доверительным интервалом</div>
+      <ul class="hint" style="margin:6px 0 18px;line-height:1.6">
+        <li><b>Карточка «Прогноз отсутствий с ДИ 95 %»</b> (Аналитика): по истории месяцев канона (до 12) — линейный тренд и прогноз на 3 месяца вперёд по двум метрикам: чел·дн отсутствий и загрузка %; колонки «Прогноз», «ДИ 95 %» (интервал прогноза ±1,96·SD·√(1+1/n)), «Тренд/мес», «История (n, SD)».</li>
+        <li>Фильтр по подразделению, выгрузка CSV со штампом, палитра «🔮»; телеметрия <code>forecast:csv</code>. Методика указана прямо в карточке — для планирования резерва под болезни и отпуска.</li>
+      </ul>
+      <div class="lbl" style="margin-top:12px">Новое в версии 3.42 — маркетплейс обменов: открытые заявки и автоподбор</div>
+      <ul class="hint" style="margin:6px 0 18px;line-height:1.6">
+        <li><b>Открытая заявка на подмену</b> («＋ Открытая заявка» во вкладке «Обмены» и палитра): заявка без напарника — сотрудник, дата, причина; поступает в общий список и на согласование после подбора.</li>
+        <li><b>Автоподбор напарника «🤖»</b>: ранжированный список кандидатов с оценкой как в докторе покрытия — пожелания («не ставить» исключает, «предпочтительно» +40), <b>баланс подмен</b> (брал/отдавал за время жизни базы), загрузка месяца, отдых после суточных, серии рабочих дней, недельные часы, допуски; «＋» предлагает напарника (заявка уходит в стандартный маршрут согласования).</li>
+        <li>Аудит и телеметрия: <code>swap:open</code>, <code>swap:match</code>, записи «Открытая заявка», «Автоподбор напарника».</li>
+      </ul>
       <div class="lbl" style="margin-top:12px">Новое в версии 3.41 — допуски: прогноз истечения и риск покрытия</div>
       <ul class="hint" style="margin:6px 0 18px;line-height:1.6">
         <li><b>Форвард-список истечений</b> (Справочники → «Прогноз истечения допусков»): горизонт 7–730 дней; ступенчатые пиллы «просрочен / ≤ 30 дней / далее»; <b>риск покрытия</b> — сколько смен ротации/бригады сотрудника придётся на 30 дней после истечения (смена без действующего допуска блокируется правилом certRequired).</li>
@@ -3969,7 +4052,7 @@ function renderBulk(){
   $('patStart').max=dim(cur.y,cur.m);
   const pa=$('patAnchor');if(pa&&!pa.value)pa.value=`${cur.y}-${pad2(cur.m)}-01`;
 }
-function renderPatterns(){renderBulk();try{renderBrigades()}catch(e){};try{renderMobiNav()}catch(e){};try{renderBudgets()}catch(e){};try{renderCertForecast()}catch(e){}}   /* 3.36–3.41 хуки */
+function renderPatterns(){renderBulk();try{renderBrigades()}catch(e){};try{renderMobiNav()}catch(e){};try{renderBudgets()}catch(e){};try{renderCertForecast()}catch(e){};try{renderForecastCard()}catch(e){};try{a11yPatch()}catch(e){}}   /* 3.36–3.45 хуки */
 function warnEmpSet(y,m){
   /* 3.20: сотрудники с нарушениями/предупреждениями за месяц — для сортировки и фильтра */
   const S=new Set();
@@ -9388,6 +9471,7 @@ function renderSwaps(){
     const arrow=s.type==='swap'?'⇄ обмен':'→ подмена';
     const acts=[];
     if(s.status==='new')acts.push(`<button class="btn ghost small" data-swact="${s.id}|agree">Согласие напарника</button>`);
+    if(s.status==='new'&&!s.eid2)acts.push(`<button class="btn ghost small" data-swauto="${s.id}" title="Автоподбор напарника по оценке (3.42)">🤖 Автоподбор</button>`);
     if(s.status==='new'||s.status==='agreed'){
       acts.push(`<button class="btn small" data-swact="${s.id}|approve">Применить к плану</button>`);
       acts.push(`<button class="btn warn small" data-swact="${s.id}|reject">Отклонить</button>`);
@@ -11531,6 +11615,535 @@ function renderCertForecast(){
   });
 }
 
+/* ================= 3.42: МАРКЕТПЛЕЙС ОБМЕНОВ — ОТКРЫТЫЕ ЗАЯВКИ И АВТОПОДБОР =================
+   Открытая заявка на подмену (без напарника) + ранжированный автоподбор кандидата
+   (оценка как в докторе покрытия: пожелания, баланс подмен, загрузка, отдых, серии, неделя). */
+function coversTaken(eid){return swapList().filter(s=>s.status==='applied'&&s.eid2===eid).length}
+function coversGiven(eid){return swapList().filter(s=>s.status==='applied'&&s.eid1===eid).length}
+function swapOpenReq(o){
+  wfmEnsure();
+  const s={id:uid('sw'),ts:Date.now(),by:actor(),type:o.type||'sub',mk1:o.mk1,day1:+o.day1,eid1:o.eid1,
+    mk2:o.mk1,day2:+o.day1,eid2:null,code:o.code||'',back:'',reason:(o.reason||'').trim(),status:'new',
+    open:true,history:[{ts:Date.now(),by:actor(),act:'создана (открытая заявка)',note:o.reason||''}]};
+  if(!s.mk1||!s.day1||!s.eid1){toast('Укажите сотрудника и дату','err');return null}
+  swapList().unshift(s);
+  try{opsQueue({k:'req',sub:'swap',swap:s})}catch(e){}
+  audit('Открытая заявка на подмену',`${empName(s.eid1)} · ${dstr(s.mk1,s.day1)}`,'swap:'+s.id);
+  try{teleHit('swap:open')}catch(e){}
+  save(true);updateAlerts(true);renderSwaps();
+  toast('Открытая заявка создана — подберите напарника кнопкой «🤖»','ok');
+  return s;
+}
+function swapCandidates(sw,topN){
+  topN=topN||5;
+  if(!sw||sw.eid2)return{list:[],all:[]};
+  const[y,m]=String(sw.mk1).split('-').map(Number),d=sw.day1;
+  const dk=k(y,m,d);
+  const rCon=rule('maxConsecWork'),rWeek=rule('maxWeekHours'),rRest=rule('restAfterDuty');
+  const e1=emp(sw.eid1);
+  const es=empList(e1?e1.deptId:null).filter(e=>e.id!==sw.eid1&&e.dutyEligible!==false);
+  const restNeed=Math.max(1,rRest.on?rRest.val:1);
+  const out=[];
+  es.forEach(e=>{
+    const raw=getCode(e.id,y,m,d);
+    if(rotBusyRaw(raw))return;
+    if(raw){const r=reason(parseCell(raw).code);if(r&&r.cat==='duty')return}
+    if(dutyCertBlocked(e.id,new Date(y,m-1,d)))return;
+    if(wishBlock(e.id,dk))return;
+    const why=[],viol=[];let score=50;
+    if(wishPref(e.id,dk)){score+=40;why.push('предпочтительная дата')}
+    const taken=coversTaken(e.id),given=coversGiven(e.id);
+    if(taken<given){score+=20;why.push(`баланс подмен: брал ${fmtStd(taken)}, отдавал ${fmtStd(given)}`)}
+    else if(taken>given+2){score-=20;viol.push(`часто подменяет (${fmtStd(taken)} против ${fmtStd(given)})`)}
+    else why.push('баланс подмен ровный');
+    const st=empMonthStats(e.id,y,m);
+    if(st&&st.pct!=null&&st.pct<90){score+=15;why.push(`загрузка ${fmtStd(st.pct,{pct:true})}`)}
+    else if(st&&st.pct>110){score-=25;viol.push(`перегруз ${fmtStd(st.pct,{pct:true})}`)}
+    const hardDutyAt=dd=>{
+      if(dd<1||dd>dim(y,m))return false;
+      const rw=getCode(e.id,y,m,dd);if(!rw)return false;
+      const c0=parseCell(rw),r0=reason(c0.code);
+      return !!(r0&&r0.cat==='duty'&&((c0.hs!=null?c0.hs:(r0.hours||0))>=24||(r0.night||0)>=8));
+    };
+    const workAt=dd=>{
+      if(dd<1||dd>dim(y,m))return false;
+      const rw=getCode(e.id,y,m,dd);if(!rw)return false;
+      return dayCoeff(e.id,y,m,dd)>0;
+    };
+    let gap=0,prevDuty=null;
+    for(let j=1;j<=dim(y,m);j++){
+      const dd=d-j;if(dd<1)break;
+      if(hardDutyAt(dd)){prevDuty=dd;break}
+      if(workAt(dd))break;
+      gap++;
+    }
+    if(prevDuty!=null&&gap<restNeed){score-=60;viol.push(`отдых после дежурства ${pad2(prevDuty)}-го: ${fmtStd(gap,{unit:'дн'})}`)}
+    let back=0;for(let j=1;j<=16;j++){const dd=d-j;if(dd<1||!workAt(dd))break;back++}
+    let fwd=0;for(let j=1;j<=16;j++){const dd=d+j;if(dd>dim(y,m)||!workAt(dd))break;fwd++}
+    const series=back+1+fwd;
+    if(rCon.on&&series>rCon.val){score-=40;viol.push(`серия ${fmtStd(series,{unit:'дн'})} (лимит ${fmtStd(rCon.val,{unit:'дн'})})`)}
+    if(!why.length&&!viol.length)why.push('противопоказаний нет');
+    out.push({eid:e.id,name:e.name,pos:e.pos||'',score:Math.round(score),why,viol,taken,given});
+  });
+  out.sort((a,b)=>b.score-a.score||String(a.name).localeCompare(String(b.name),'ru'));
+  return{list:out.slice(0,topN),all:out};
+}
+function swapOffer(swId,eid2){
+  const s=swapList().find(x=>x.id===swId);if(!s)return null;
+  s.eid2=eid2;s.open=false;
+  s.history.push({ts:Date.now(),by:actor(),act:'автоподбор: предложен напарник '+empName(eid2)});
+  save(true);updateAlerts(true);renderSwaps();
+  audit('Автоподбор напарника',`${empName(s.eid1)} → ${empName(eid2)} · ${dstr(s.mk1,s.day1)}`,'swap:'+s.id);
+  try{teleHit('swap:match')}catch(e){}
+  toast('Напарник предложен: '+empName(eid2),'ok');
+  return s;
+}
+function openSwapMatch(swId){
+  const s=swapList().find(x=>x.id===swId);
+  if(!s){toast('Заявка не найдена','err');return}
+  if(s.eid2){toast('У заявки уже есть напарник','err');return}
+  try{teleHit('swap:matchui')}catch(e){}
+  const c=swapCandidates(s,6);
+  openModal({title:'🤖 Автоподбор напарника',wide:true,body:`
+    <div class="hint" style="margin-top:0">Заявка: <b>${esc(empName(s.eid1))}</b> · ${esc(dstr(s.mk1,s.day1))} · ${s.type==='swap'?'обмен':'подмена'}. Оценка как в докторе покрытия: пожелания, баланс подмен, загрузка, отдых после суточных, серии, недельные часы, допуски.</div>
+    ${c.list.length?c.list.map(x=>`<div class="candrow">
+      <button class="btn ghost tiny" data-swoffer="${s.id}:${x.eid}" title="Предложить напарника">＋</button>
+      <b style="font-size:12px">${esc(x.name)}</b>${x.pos?`<span class="hint">${esc(x.pos)}</span>`:''}
+      <span class="pill ${x.score>=70?'g':x.score>=40?'a':'r'}">${fmtStd(x.score)}</span>
+      ${x.why.map(w=>`<span class="cand-chip good">✓ ${esc(w)}</span>`).join('')}
+      ${x.viol.map(w=>`<span class="cand-chip bad">⚠ ${esc(w)}</span>`).join('')}
+    </div>`).join(''):'<div class="status err" style="margin-top:8px">Кандидатов нет: все заняты, в пожеланиях «не ставить» или без допуска.</div>'}`,
+    buttons:'<button class="btn ghost" data-csm>Закрыть</button>',
+    onMount(b){
+      b.querySelector('[data-csm]').onclick=closeModal;
+      b.querySelectorAll('[data-swoffer]').forEach(el=>el.onclick=()=>{
+        const[id,eid]=el.dataset.swoffer.split(':');
+        swapOffer(id,eid);closeModal();
+      });
+    }});
+}
+function openSwapOpenReq(){
+  const{y,m}=cur;
+  openModal({title:'＋ Открытая заявка на подмену',body:`
+    <div class="field"><label>Сотрудник</label><select class="inp" id="soEmp">${empOptions()}</select></div>
+    <div class="frow"><div class="field"><label>Дата смены</label><input type="number" class="inp" id="soDay" min="1" max="${dim(y,m)}" value="1"></div>
+    <div class="field"><label>Месяц</label><input class="inp" value="${MUP[m-1]} ${y}" disabled></div></div>
+    <div class="field"><label>Причина</label><input class="inp" id="soReason" placeholder="например: учёба, семейные обстоятельства"></div>`,
+    buttons:'<button class="btn ghost" data-cso>Отмена</button><button class="btn" id="soGo">Создать заявку</button>',
+    onMount(b){
+      b.querySelector('[data-cso]').onclick=closeModal;
+      b.querySelector('#soGo').onclick=()=>{
+        const r=swapOpenReq({eid1:b.querySelector('#soEmp').value,mk1:mkOf(y,m),day1:+b.querySelector('#soDay').value||1,reason:b.querySelector('#soReason').value});
+        if(r)closeModal();
+      };
+    }});
+}
+
+/* ================= 3.43: ПРОГНОЗЫ ОТСУТСТВИЙ С ДОВЕРИТЕЛЬНЫМ ИНТЕРВАЛОМ =================
+   Линейный тренд по истории месяцев канона (до 12) + интервал прогноза 95 %
+   (1.96·SD·√(1+1/n)) по двум метрикам: чел·дн отсутствий и загрузка %. */
+function linreg(ys){
+  const n=ys.length;
+  if(!n)return{a:0,b:0};
+  if(n<2)return{a:ys[0]||0,b:0};
+  const xs=ys.map((_,i)=>i);
+  const mx=xs.reduce((a,b)=>a+b,0)/n,my=ys.reduce((a,b)=>a+b,0)/n;
+  let num=0,den=0;
+  xs.forEach((x,i)=>{num+=(x-mx)*(ys[i]-my);den+=(x-mx)*(x-mx)});
+  const b=den?num/den:0;
+  return{a:my-b*mx,b};
+}
+function forecastAbsences(deptId,monthsAhead){
+  monthsAhead=monthsAhead||3;
+  const t=TODAY(),hist=[];
+  for(let back=11;back>=1;back--){
+    const d=new Date(t.getFullYear(),t.getMonth()-back,1),y=d.getFullYear(),m=d.getMonth()+1;
+    if(!state.plan[mkOf(y,m)])continue;
+    const es=empList(deptId);if(!es.length)continue;
+    let abs=0,load=0,norm=0;
+    es.forEach(e=>{const st=empMonthStats(e.id,y,m);ABS_CATS.forEach(ct=>{abs+=(st.byCat&&st.byCat[ct])||0});load+=st.load;norm+=st.norm});
+    hist.push({y,m,abs,loadPct:norm?Math.round(load/norm*1000)/10:0});
+  }
+  if(hist.length<3)return null;
+  const out=[];
+  [['abs','Отсутствия, чел·дн'],['loadPct','Загрузка, %']].forEach(([key,label])=>{
+    const ys=hist.map(h=>h[key]);
+    const{a,b}=linreg(ys);
+    const mean=ys.reduce((x,y)=>x+y,0)/ys.length;
+    const sd=Math.sqrt(ys.reduce((s2,y)=>s2+(y-mean)*(y-mean),0)/Math.max(1,ys.length-1));
+    const half=1.96*sd*Math.sqrt(1+1/ys.length);   /* интервал прогноза, 95 % */
+    for(let f=1;f<=monthsAhead;f++){
+      const x=hist.length-1+f;
+      const pred=Math.max(0,a+b*x);
+      const d=new Date(t.getFullYear(),t.getMonth()+f,1);
+      out.push({key,label,y:d.getFullYear(),m:d.getMonth()+1,
+        pred:Math.round(pred*10)/10,lo:Math.round(Math.max(0,pred-half)*10)/10,hi:Math.round((pred+half)*10)/10,
+        n:ys.length,sd:Math.round(sd*10)/10,trend:Math.round(b*100)/100});
+    }
+  });
+  return{deptId,hist,out};
+}
+function renderForecastCard(){
+  const box=$('fcBox');if(!box)return;
+  const deptId=$('fcDept')?$('fcDept').value:'all';
+  const f=forecastAbsences(deptId==='all'?null:deptId,3);
+  if(!f){box.innerHTML='<div class="hint">Нужно ≥ 3 месяцев истории плана — прогнозу не на чем учиться.</div>';return}
+  box.innerHTML=`<div class="scroll-x"><table class="rtbl"><thead><tr><th>Период</th><th>Метрика</th><th class="n">Прогноз</th><th class="n">ДИ 95 %</th><th class="n">Тренд/мес</th><th class="n">История</th></tr></thead><tbody>
+    ${f.out.map(r=>`<tr><td>${MUP[r.m-1]} ${r.y}</td><td>${esc(r.label)}</td>
+      <td class="n"><b>${fmtStd(r.pred,{dec:1})}</b></td>
+      <td class="n">${fmtStd(r.lo,{dec:1})}–${fmtStd(r.hi,{dec:1})}</td>
+      <td class="n">${r.trend>0?'+':''}${fmtStd(r.trend,{dec:2})}</td>
+      <td class="n">${fmtStd(r.n,{unit:'мес'})} · SD ${fmtStd(r.sd,{dec:1})}</td></tr>`).join('')}
+    </tbody></table></div>
+    <div class="hint" style="margin-top:6px">Методика: линейный тренд по истории месяцев канона (до 12); интервал прогноза 95 % = ±1,96·SD·√(1+1/n). Использовать для планирования резерва под болезни и отпуска.</div>`;
+}
+function forecastAbsCsvDl(){
+  const deptId=$('fcDept')?$('fcDept').value:'all';
+  const f=forecastAbsences(deptId==='all'?null:deptId,3);
+  if(!f){toast('Недостаточно истории для прогноза','err');return}
+  const rows=[['Прогноз отсутствий с ДИ 95%',(dept(deptId==='all'?null:deptId)||{}).name||'все','штамп',stampPlain('an')],[],
+    ['Период','Метрика','Прогноз','ДИ низ','ДИ верх','Тренд/мес','Месяцев истории','SD']];
+  f.out.forEach(r=>rows.push([MUP[r.m-1]+' '+r.y,r.label,r.pred,r.lo,r.hi,r.trend,r.n,r.sd]));
+  downloadCsv('prognoz-otsutstvij-'+(deptId||'all')+'.csv',rows);
+  audit('Выгрузка прогноза отсутствий',`${(dept(deptId==='all'?null:deptId)||{}).name||'все'} · CSV`,'forecast');
+  try{teleHit('forecast:csv')}catch(e){}
+  toast('Прогноз выгружен в CSV','ok');
+}
+
+/* ================= 3.44: КОНСТРУКТОР ПРИКАЗОВ =================
+   Реестр шаблонов приказов с плейсхолдерами, источники строк (отпуска, дежурства,
+   произвольный текст), предпросмотр, экспорт .txt и .docx (JSZip при наличии). */
+const DEFAULT_ORDER_TPLS=[
+  {id:'ot1',name:'Приказ об утверждении графика отпусков',src:'vac',
+   body:'{{ORG}}\nПРИКАЗ № {{NUM}} от {{DATE}}\n\nОб утверждении графика отпусков за {{PERIOD}}:\n\n{{ROWS}}\n\nОснование: заявления сотрудников и согласование руководителей. Ответственный за исполнение: начальник отдела кадров.\n\nКадровая служба: ____________'},
+  {id:'ot2',name:'Приказ об утверждении графика дежурств',src:'duty',
+   body:'{{ORG}}\nПРИКАЗ № {{NUM}} от {{DATE}}\n\nОб утверждении графика дежурств за {{PERIOD}}:\n\n{{ROWS}}\n\nОснование: производственная необходимость, минимум дежурных в сутки. Контроль исполнения возложить на начальника дежурной службы.\n\nДежурная служба: ____________'},
+  {id:'ot3',name:'Произвольный приказ',src:'custom',
+   body:'{{ORG}}\nПРИКАЗ № {{NUM}} от {{DATE}}\n\n{{TEXT}}\n\nОснование: решение руководителя. \n\nПодпись: ____________'}];
+function orderTpls(){if(!Array.isArray(state.orderTpls)||!state.orderTpls.length)state.orderTpls=clone(DEFAULT_ORDER_TPLS);return state.orderTpls}
+function orderRows(src,y,m,deptId){
+  if(src==='vac')return vacRequests().filter(r=>r.status==='approved'&&r.year===y&&(!deptId||deptId==='all'||(emp(r.eid)||{}).deptId===deptId))
+    .map(r=>`— ${empName(r.eid)}: отпуск с ${r.from.split('-').reverse().join('.')} по ${r.to.split('-').reverse().join('.')} (${daysBetween(r.from,r.to)} дн.)`);
+  if(src==='duty')return empList(deptId==='all'?null:deptId).map(e=>{
+    const days=[];for(let d=1;d<=dim(y,m);d++){const raw=getCode(e.id,y,m,d);if(!raw)continue;const r=reason(parseCell(raw).code);if(r&&r.cat==='duty')days.push(d)}
+    return days.length?`— ${e.name}: дежурства ${days.join(', ')} (${fmtStd(days.length,{unit:'дн'})})`:null}).filter(Boolean);
+  return [];
+}
+function orderRender(tpl,ctx){
+  return String(tpl.body||'')
+    .replace(/\{\{ORG\}\}/g,ctx.org).replace(/\{\{NUM\}\}/g,ctx.num).replace(/\{\{DATE\}\}/g,ctx.date)
+    .replace(/\{\{PERIOD\}\}/g,ctx.period).replace(/\{\{ROWS\}\}/g,ctx.rows.join('\n')||'(строк нет — измените источник или период)')
+    .replace(/\{\{TEXT\}\}/g,ctx.text||'');
+}
+function orderDocxDl(title,text){
+  if(typeof JSZip==='undefined'||!window.JSZip){toast('JSZip недоступен без сети в онлайн-сборке — используйте .txt (в офлайн-сборке docx доступен)','err');return false}
+  const paras=String(text).split('\n').map(ln=>`<w:p><w:r><w:t xml:space="preserve">${dxEsc(ln)}</w:t></w:r></w:p>`).join('');
+  const doc=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>${paras}<w:sectPr><w:pgSz w:w="11906" w:h="16838"/></w:sectPr></w:body></w:document>`;
+  const zip=new window.JSZip();
+  zip.file('[Content_Types].xml','<?xml version="1.0"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>');
+  zip.file('_rels/.rels','<?xml version="1.0"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>');
+  zip.file('word/document.xml',doc);
+  zip.generateAsync({type:'blob'}).then(bl=>{
+    const a=document.createElement('a');a.href=URL.createObjectURL(bl);a.download=title+'.docx';a.click();
+    setTimeout(()=>URL.revokeObjectURL(a.href),4000);
+  });
+  return true;
+}
+function openOrderConstructor(tplId){
+  try{teleHit('order:ui')}catch(e){}
+  const tpls=orderTpls();
+  const t0=tpls.find(x=>x.id===tplId)||tpls[0];
+  openModal({title:'📜 Конструктор приказов',wide:true,body:`
+    <div class="frow" style="flex-wrap:wrap;gap:8px">
+      <div class="field" style="flex:1.4;margin:0"><label>Шаблон</label><select class="inp" id="ocTpl">${tpls.map(t=>`<option value="${t.id}" ${t.id===t0.id?'selected':''}>${esc(t.name)}</option>`).join('')}</select></div>
+      <div class="field" style="margin:0"><label>Номер</label><input class="inp" id="ocNum" value="1/ОД" style="width:90px"></div>
+      <div class="field" style="margin:0"><label>Подразделение</label><select class="inp" id="ocDept"><option value="all">все</option>${state.departments.map(d=>`<option value="${d.id}">${esc(d.name)}</option>`).join('')}</select></div>
+    </div>
+    <div class="field"><label>Текст шаблона (плейсхолдеры: {{ORG}} {{NUM}} {{DATE}} {{PERIOD}} {{ROWS}} {{TEXT}})</label>
+      <textarea id="ocBody" class="inp" style="min-height:150px">${esc(t0.body)}</textarea></div>
+    <div class="field"><label>Произвольный текст (для источника «custom», плейсхолдер {{TEXT}})</label><textarea id="ocText" class="inp" style="min-height:60px" placeholder="Например: утвердить состав дежурной службы на период…"></textarea></div>
+    <div class="lbl" style="margin-top:10px">Предпросмотр</div>
+    <pre id="ocPrev" class="mono" style="white-space:pre-wrap;background:var(--soft);border:1px solid var(--line);border-radius:8px;padding:10px;font-size:11.5px;max-height:34vh;overflow:auto"></pre>`,
+    buttons:`<button class="btn ghost" data-coc>Закрыть</button><button class="btn ghost" id="ocSave">💾 Сохранить шаблон</button><button class="btn ghost" id="ocTxt">⤓ .txt</button><button class="btn" id="ocDocx">⤓ DOCX</button>`,
+    onMount(b){
+      const ctx=()=>{
+        const tpl=orderTpls().find(x=>x.id===b.querySelector('#ocTpl').value)||orderTpls()[0];
+        const deptId=b.querySelector('#ocDept').value;
+        return{tpl,ctx:{org:state.org,num:b.querySelector('#ocNum').value,date:new Date().toLocaleDateString('ru-RU'),
+          period:MUP[cur.m-1]+' '+cur.y,rows:orderRows(tpl.src,cur.y,cur.m,deptId),text:b.querySelector('#ocText').value}};
+      };
+      const live=()=>{const{tpl,ctx:cc}=ctx();b.querySelector('#ocPrev').textContent=orderRender({body:b.querySelector('#ocBody').value},cc)};
+      ['ocTpl','ocNum','ocDept','ocBody','ocText'].forEach(id=>{const el=b.querySelector('#'+id);el.onchange=live;el.oninput=live});
+      b.querySelector('#ocTpl').onchange=()=>{const t=orderTpls().find(x=>x.id===b.querySelector('#ocTpl').value);if(t)b.querySelector('#ocBody').value=t.body;live()};
+      live();
+      b.querySelector('[data-coc]').onclick=closeModal;
+      b.querySelector('#ocSave').onclick=()=>{
+        const{tpl}=ctx();
+        tpl.body=b.querySelector('#ocBody').value;
+        save(true);audit('Шаблон приказа сохранён',tpl.name,'orders');toast('Шаблон сохранён','ok');
+      };
+      b.querySelector('#ocTxt').onclick=()=>{
+        const{tpl,ctx:cc}=ctx();
+        download('prikaz-'+cc.num.replace(/[^\wа-яё-]/gi,'')+'.txt',orderRender({body:b.querySelector('#ocBody').value},cc),'text/plain');
+        audit('Выгрузка приказа',tpl.name+' · txt','orders');toast('Приказ выгружен в .txt','ok');
+      };
+      b.querySelector('#ocDocx').onclick=()=>{
+        const{tpl,ctx:cc}=ctx();
+        if(orderDocxDl('prikaz-'+cc.num.replace(/[^\wа-яё-]/gi,''),orderRender({body:b.querySelector('#ocBody').value},cc))){
+          audit('Выгрузка приказа',tpl.name+' · docx','orders');toast('Приказ выгружен в DOCX','ok');
+        }
+      };
+    }});
+}
+
+/* ================= 3.45: A11Y ВОЛНА 2 =================
+   Высококонтрастный режим (персонально, uiPrefs), карта клавиатурных сокращений,
+   skip-link к навигации, aria-live для тостов, role=grid у сеток плана и дежурств. */
+const SHORTCUTS=[
+  ['F1','Справка и горячие клавиши'],['F2','Дайджест руководителю'],['F3','Лист ознакомления по сигналам'],
+  ['F4','Квартальный лист ознакомления'],['F7','Пакет руководителя (XLSX+DOCX+CSV)'],
+  ['Ctrl+K','Командная палитра'],['Ctrl+Z / Ctrl+Y','Отменить / повторить'],
+  ['/','Поиск сотрудника в плане'],['Alt+↓ / Alt+↑','Навигация по результатам сквозного поиска'],
+  ['Esc','Закрыть модалку / палитру / центр уведомлений'],
+  ['Shift+тянуть','Прямоугольное выделение в сетке плана'],['Enter / Пробел','Кисть в клавиатурном режиме сетки'],
+  ['Del','Стереть ячейку в клавиатурном режиме'],['Стрелки','Навигация по сетке плана (клавиатурный режим)'],
+  ['Свайп ← / →','Месяц назад / вперёд (мобильная оболочка 3.38)'],['Tab / Shift+Tab','Цикл фокуса внутри модалки']];
+function openShortcuts(){
+  try{teleHit('a11y:keys')}catch(e){}
+  openModal({title:'⌨ Карта клавиатурных сокращений',wide:true,body:`
+    <div class="scroll-x"><table class="rtbl"><thead><tr><th style="min-width:140px">Клавиши</th><th>Действие</th></tr></thead><tbody>
+    ${SHORTCUTS.map(s=>`<tr><td><span class="kbd">${esc(s[0])}</span></td><td>${esc(s[1])}</td></tr>`).join('')}
+    </tbody></table></div>
+    <div class="hint" style="margin-top:8px">3.45: карта доступна также из палитры («⌨ Карта клавиш») и справки. Фокус внутри модалок цикличен (Tab / Shift+Tab), тосты объявляются скринридеру (aria-live).</div>`,
+    buttons:'<button class="btn ghost" data-cks>Закрыть</button>',
+    onMount(b){b.querySelector('[data-cks]').onclick=closeModal}});
+}
+function a11yInit(){
+  const tb=$('toastBox');
+  if(tb&&!tb.getAttribute('aria-live')){tb.setAttribute('aria-live','polite');tb.setAttribute('role','status')}
+  if(!$('skipLink')){
+    const a=document.createElement('a');
+    a.id='skipLink';a.className='skip-link';a.href='#tabsBar';
+    a.textContent='Пропустить к навигации по разделам';
+    document.body.insertBefore(a,document.body.firstChild);
+  }
+  const sc=$('setContrast');
+  if(sc){
+    sc.checked=!!uiPrefs().contrast;
+    sc.onchange=e=>{setUiPref('contrast',e.target.checked);applyUi();
+      toast(e.target.checked?'Высокий контраст включён':'Высокий контраст выключен')};
+  }
+  applyUi();
+}
+function a11yPatch(){
+  const t=$('tblWrap')&&$('tblWrap').querySelector('table.pt');
+  if(t){t.setAttribute('role','grid');t.setAttribute('aria-label','Сетка плана на '+MUP[cur.m-1]+' '+cur.y)}
+  const dw=$('dutyWrap')&&$('dutyWrap').querySelector('table');
+  if(dw){dw.setAttribute('role','grid');dw.setAttribute('aria-label','Сетка дежурств на '+MUP[cur.m-1]+' '+cur.y)}
+}
+
+/* ================= 3.46: ВОЛНА ПРОИЗВОДИТЕЛЬНОСТИ =================
+   Профилирование запуска и операций (performance marks/spans), карточка
+   «Профилирование и нагрузка», отложенная сверка календаря (boot быстрее),
+   генератор нагрузочного профиля demoScale(1000). */
+const PERF=window.__PT_PERF=window.__PT_PERF||{marks:{},spans:[]};
+function perfMark(name){try{PERF.marks[name]=Math.round(performance.now())}catch(e){}}
+function perfMarkBootStart(){try{PERF.marks['boot:start']=0}catch(e){}}
+function perfSpan(name,fn){
+  const t0=performance.now();
+  const r=fn();
+  PERF.spans.push({name,ms:Math.round(performance.now()-t0)});
+  if(PERF.spans.length>400)PERF.spans.shift();
+  return r;
+}
+function perfReport(){
+  const spans={};
+  PERF.spans.forEach(s=>{spans[s.name]=(spans[s.name]||0)+s.ms});
+  return{marks:PERF.marks,spans,spanCount:PERF.spans.length,
+    cache:{stat:statCache.size,olap:(typeof olapCache!=='undefined'&&olapCache)?1:0,an:anData?1:0}};
+}
+function perfMeasureTabs(){
+  const out=[];
+  ['dash','me','plan','duty','swap','vac','tabel','cal','an','rep','ops','board','pdf','data','set'].forEach(t=>{
+    const t0=performance.now();
+    try{showTab(t,true)}catch(e){}
+    out.push({tab:t,ms:Math.round(performance.now()-t0)});
+  });
+  try{showTab('plan')}catch(e){}
+  out.forEach(o=>PERF.spans.push({name:'tab:'+o.tab,ms:o.ms}));
+  renderPerfCard();
+  return out;
+}
+function renderPerfCard(){
+  const box=$('perfBox');if(!box)return;
+  const r=perfReport();
+  const mk=Object.keys(r.marks).length?Object.entries(r.marks).map(([k2,v])=>`${esc(k2)}: <b>${fmtStd(v,{unit:'мс'})}</b>`).join(' · '):'—';
+  box.innerHTML=`<div class="hint" style="margin-top:0">Метки запуска: ${mk}</div>
+  <div class="scroll-x" style="max-height:30vh;overflow:auto"><table class="rtbl"><thead><tr><th>Операция</th><th class="n">Сумма, мс</th></tr></thead><tbody>
+  ${Object.entries(r.spans).sort((a,b)=>b[1]-a[1]).slice(0,12).map(([k2,v])=>`<tr><td>${esc(k2)}</td><td class="n">${fmtStd(v,{unit:'мс'})}</td></tr>`).join('')||'<tr><td colspan="2">Замеров ещё нет — нажмите «Замерить вкладки».</td></tr>'}
+  </tbody></table></div>
+  <div class="hint" style="margin-top:6px">Кэши: статистика ${fmtStd(r.cache.stat,{unit:'записей'})}, OLAP ${r.cache.olap?'горячий':'холодный'}, годовая аналитика ${r.cache.an?'горячая':'холодная'}. Замеры живут только в памяти вкладки.</div>`;
+}
+function demoScale(n){
+  n=n||1000;
+  const doIt=()=>{
+    const t0=performance.now();
+    const rnd=mulberry32(42);
+    const SUR=['Иванов','Петров','Сидоров','Кузнецов','Смирнов','Попов','Васильев','Соколов','Михайлов','Новиков','Фёдоров','Морозов','Волков','Алексеев','Лебедев','Семёнов','Егоров','Павлов','Козлов','Степанов'];
+    const INI='АБВГДЕИКЛМНОПРСТФШ';
+    const deps=state.departments.length?state.departments:[{id:'d1',name:'Отдел 1',minDuty:0,dutyCode:'Д1'}];
+    const emps=[];
+    for(let i=0;i<n;i++){
+      emps.push({id:'sc'+(i+1),deptId:deps[i%deps.length].id,
+        name:SUR[i%SUR.length]+' '+INI[Math.floor(rnd()*INI.length)]+'. '+INI[Math.floor(rnd()*INI.length)]+'.',
+        pos:'специалист '+((i%4)+1),rate:1,vacationDays:28,hoursWeek:40,
+        dutyEligible:rnd()<.5,tab:'SC-'+String(i+1).padStart(4,'0')});
+    }
+    state.employees=emps;
+    deptVis=new Set(deps.map(d=>d.id));
+    const t=TODAY(),mk=mkOf(t.getFullYear(),t.getMonth()+1);
+    state.plan[mk]={};
+    emps.forEach((e,i)=>{
+      if(i%3)return;
+      const row={};
+      for(let d=1;d<=7;d++)if(rnd()<.3)row[d]='Б';
+      state.plan[mk][e.id]=row;
+    });
+    bust();save(true);
+    const ms=performance.now()-t0;
+    PERF.spans.push({name:'demoScale:'+n,ms:Math.round(ms)});
+    refreshAll();
+    audit('Нагрузочный профиль',`${fmtStd(n,{unit:'сотр'})} · генерация ${fmtStd(Math.round(ms),{unit:'мс'})}`,'perf');
+    try{teleHit('perf:scale')}catch(e){}
+    toast(`Профиль ${fmtStd(n,{unit:'сотр'})} готов за ${fmtStd(Math.round(ms),{unit:'мс'})}`,'ok');
+  };
+  confirmBox(`Сгенерировать нагрузочный профиль: ${fmtStd(n,{unit:'сотр'})} (текущий штат будет заменён)? Использовать только для замеров производительности.`,doIt,'Да, сгенерировать');
+}
+
+/* ================= 3.47: ПАСПОРТА ДАННЫХ И ОБЕЗЛИЧЕННЫЙ ЭКСПОРТ =================
+   Реестр линий данных (dataset → источник → потребители → хранение → retention)
+   и обезличенный экспорт канона (ФИО/табельные/должности/орг/подразделения). */
+const DATA_LINEAGE=[
+  {ds:'plan',src:'ручной ввод табельщика, импорт XLSX/CSV/OCR, ротации и бригады, доктор покрытия',cons:'сетка плана, табель Т-13, аналитика, отчёты, прогнозы, печать',store:'канон: localStorage / сервер ЛВС / SQLite (PT_DB)',ret:'снапшоты месяца, cron-бэкапы PT_BACKUP_*'},
+  {ds:'fact',src:'импорт СКУД (POST /api/v1/skud), ручной ввод факта',cons:'план-факт, отклонения, отчёт об использовании времени',store:'канон (state.fact)',ret:'вместе с каноном'},
+  {ds:'employees/departments',src:'справочники вручную, импорт штатки, SSO-провижининг',cons:'все расчёты, ростер, OLAP, пакеты руководителя',store:'канон',ret:'вместе с каноном; обезличивается при экспорте 3.47'},
+  {ds:'vac',src:'заявки сотрудников («Мой месяц»), автоплан года',cons:'график отпусков, приказы, fairness лета',store:'канон',ret:'вместе с каноном'},
+  {ds:'swaps',src:'заявки обмена/подмены, автоподбор 3.42',cons:'маршруты согласования, план после применения',store:'канон',ret:'вместе с каноном'},
+  {ds:'certs/certReqs',src:'справочник допусков, заявки на продление 3.41',cons:'блокировка назначений, прогноз истечения, риск покрытия',store:'канон',ret:'вместе с каноном; при обезличивании номера не выгружаются'},
+  {ds:'budgets',src:'лимиты ФОТ вручную (3.39)',cons:'статусы перерасхода, сигнал дашборда, CSV',store:'канон',ret:'вместе с каноном'},
+  {ds:'brigades',src:'мастер ротаций (веер, 3.36)',cons:'применение к месяцам, «Моя бригада», ведомость, ICS',store:'канон',ret:'вместе с каноном'},
+  {ds:'orderTpls',src:'конструктор приказов (3.44)',cons:'печать/DOCX приказов',store:'канон',ret:'вместе с каноном'},
+  {ds:'dutyWishes',src:'пожелания сотрудников («не ставить»/«предпочтительно»)',cons:'автозаполнение, ростер, доктор покрытия, автоподбор',store:'канон',ret:'вместе с каноном'},
+  {ds:'log (аудит)',src:'все значимые действия клиента и сервера',cons:'журнал аудита, /admin, расследования',store:'канон + серверный jsonl с ротацией',ret:'ротация сервера; при обезличивании имена заменяются'},
+  {ds:'tele (pt.tele)',src:'телеметрия поверхностей клиента',cons:'меры успеха внедрения, выгрузка телеметрии',store:'localStorage рабочего места (не канон)',ret:'локально, удаляется очисткой профиля'},
+  {ds:'xchg (журнал обмена)',src:'REST-обмен «1С»/СКУД/OCR (3.35)',cons:'веб-панель обмена, ретрай',store:'серверный файл PT_XCHG_FILE',ret:'до PT_XCHG_MAX записей'},
+];
+function openLineage(){
+  try{teleHit('data:lineage')}catch(e){}
+  openModal({title:'🛂 Паспорта данных: линии и хранение',wide:true,body:`
+    <div class="scroll-x"><table class="rtbl"><thead><tr><th>Данные</th><th>Источник</th><th>Потребители</th><th>Хранение</th><th>Retention</th></tr></thead><tbody>
+    ${DATA_LINEAGE.map(r=>`<tr><td><b>${esc(r.ds)}</b></td><td>${esc(r.src)}</td><td>${esc(r.cons)}</td><td>${esc(r.store)}</td><td>${esc(r.ret)}</td></tr>`).join('')}
+    </tbody></table></div>
+    <div class="hint" style="margin-top:8px">Паспорт отвечает на вопросы «откуда данные, кто их потребляет, где живут и сколько хранятся». Обезличенный экспорт — кнопка «⤓ Обезличенный канон» в карточке «Данные».</div>`,
+    buttons:'<button class="btn ghost" data-clg>Закрыть</button>',
+    onMount(b){b.querySelector('[data-clg]').onclick=closeModal}});
+}
+function exportAnonJson(opt){
+  opt=opt||{};
+  const c=clone(state);
+  const names=[];
+  (c.employees||[]).forEach((e,i)=>{
+    names.push(e.name);
+    if(opt.names!==false)e.name='Сотрудник '+String(i+1).padStart(4,'0');
+    if(opt.tab!==false)e.tab='T-'+String(9000+i);
+    if(opt.pos!==false)e.pos=e.pos?('должность '+((i%4)+1)):e.pos;
+  });
+  if(opt.org!==false)c.org='Организация (обезличено)';
+  if(opt.depts!==false)(c.departments||[]).forEach((d,i)=>{d.name='Подразделение '+(i+1)});
+  /* чистим имена из журнала аудита и обратной связи */
+  const uniq=Array.from(new Set(names)).sort((a,b)=>b.length-a.length);
+  const scrub=t=>{let s=String(t==null?'':t);uniq.forEach((nm,i)=>{if(nm)s=s.split(nm).join('Сотрудник '+String(names.indexOf(nm)+1).padStart(4,'0'))});return s};
+  (c.log||[]).forEach(r=>{r.detail=scrub(r.detail);r.by=scrub(r.by)});
+  (c.feedback||[]).forEach(f=>{f.text=scrub(f.text);f.who=scrub(f.who)});
+  (c.dutyWishes||[]).forEach(w=>{w.note=scrub(w.note)});
+  c.__anon={ts:Date.now(),opt,version:'3.47'};
+  download('canon-obezlichenny-'+new Date().toISOString().slice(0,10)+'.json',JSON.stringify(c),'application/json');
+  audit('Обезличенный экспорт канона',`ФИО:${opt.names!==false?'да':'нет'} · таб:${opt.tab!==false?'да':'нет'} · орг:${opt.org!==false?'да':'нет'}`,'privacy');
+  try{teleHit('data:anon')}catch(e){}
+  toast('Обезличенный канон выгружен','ok');
+}
+
+/* ================= 3.48: КОНСОЛИДАЦИЯ ПОЕЗДА =================
+   Карта фич 3.36–3.48, саудит состава поезда (маркеры функций каждой версии),
+   единый ci-all. */
+const FEATURE_MAP=[
+  {v:'3.36',t:'Конструктор ротаций, бригады и доктор покрытия',f:'паспорт шаблона ТК РФ, веер по бригадам, бригады в каноне, доктор покрытия, конструктор',tests:'smoke 105 · ux 57 · viz 34'},
+  {v:'3.37',t:'Сценарии ротаций и годовой баланс',f:'what-if покрытия, годовой баланс и ребаланс, ICS ротаций',tests:'smoke 49 · ux 24 · viz 24'},
+  {v:'3.38',t:'Мобильная волна',f:'нижняя навигация, свайп месяца, авто-компакт, PWA-lite',tests:'smoke 19 · ux 12'},
+  {v:'3.39',t:'Бюджет и лимиты ФОТ',f:'лимиты ₽/мес, план/факт против лимита, сигнал перерасхода, CSV',tests:'smoke 18'},
+  {v:'3.40',t:'Личный дайджест и уведомления',f:'«Мой день», копия/.txt, ежедневное Notification',tests:'smoke 19'},
+  {v:'3.41',t:'Допуски: прогноз и риск покрытия',f:'форвард-истечения, смены под риском, заявки на продление',tests:'smoke 21'},
+  {v:'3.42',t:'Маркетплейс обменов',f:'открытые заявки, автоподбор напарника с оценкой',tests:'smoke 16'},
+  {v:'3.43',t:'Прогнозы отсутствий с ДИ 95 %',f:'линейный тренд по истории канона, интервал прогноза, CSV',tests:'smoke 14'},
+  {v:'3.44',t:'Конструктор приказов',f:'шаблоны с плейсхолдерами, источники строк, .txt/.docx',tests:'smoke 15'},
+  {v:'3.45',t:'Доступность, волна 2',f:'высокий контраст, карта клавиш, skip-link, aria-live, role=grid',tests:'smoke 16'},
+  {v:'3.46',t:'Волна производительности',f:'профилирование запуска/вкладок, отложенная сверка календаря, профиль 1000',tests:'smoke 14'},
+  {v:'3.47',t:'Паспорта данных и обезличенный экспорт',f:'реестр 13 линий данных, обезличенный канон JSON',tests:'smoke 12'},
+  {v:'3.48',t:'Консолидация поезда',f:'карта фич, саудит состава, ci-all, офлайн-сборка финала',tests:'smoke 12'},
+];
+function openFeatureMap(){
+  try{teleHit('train:map')}catch(e){}
+  openModal({title:'🗺 Карта фич поезда 3.36–3.48',wide:true,body:`
+    <div class="scroll-x"><table class="rtbl"><thead><tr><th>Версия</th><th>Тема</th><th>Ключевые фичи</th><th>Тесты</th></tr></thead><tbody>
+    ${FEATURE_MAP.map(r=>`<tr><td><b>${esc(r.v)}</b></td><td>${esc(r.t)}</td><td>${esc(r.f)}</td><td class="n">${esc(r.tests)}</td></tr>`).join('')}
+    </tbody></table></div>
+    <div class="hint" style="margin-top:8px">Полные релиз-ноты каждой версии — файлы РЕЛИЗ-WFM-3.xx.md в репозитории; карта выгружается в JSON кнопкой ниже.</div>`,
+    buttons:'<button class="btn ghost" data-cfm2>Закрыть</button><button class="btn ghost" id="fmJson">⤓ JSON карты</button>',
+    onMount(b){
+      b.querySelector('[data-cfm2]').onclick=closeModal;
+      b.querySelector('#fmJson').onclick=()=>{
+        download('karta-fich-3.36-3.48.json',JSON.stringify(FEATURE_MAP,null,2),'application/json');
+        audit('Выгрузка карты фич','3.36–3.48 · JSON','train');
+        toast('Карта фич выгружена','ok');
+      };
+    }});
+}
+function trainSelfAudit(){
+  const chk=[
+    ['3.36 паспорт шаблона',typeof patternPassport==='function'],
+    ['3.36 веер и бригады',typeof applyPatternFan==='function'&&typeof brigadeList==='function'],
+    ['3.36 доктор покрытия',typeof openCoverageDoctor==='function'&&typeof coverageCandidates==='function'],
+    ['3.37 what-if',typeof rotWhatIf==='function'],
+    ['3.37 годовой баланс',typeof brigadeRebalance==='function'],
+    ['3.37 ICS',typeof exportBrigadeIcs==='function'],
+    ['3.38 мобильная оболочка',typeof initMobileShell==='function'&&typeof swipeMonth==='function'],
+    ['3.39 бюджет',typeof budgetStatus==='function'&&typeof renderBudgetNag==='function'],
+    ['3.40 дайджест',typeof personalDigest==='function'&&typeof meNotifyCheck==='function'],
+    ['3.41 допуски',typeof certForecast==='function'&&typeof certReqAdd==='function'],
+    ['3.42 автоподбор',typeof swapCandidates==='function'&&typeof swapOpenReq==='function'],
+    ['3.43 прогноз с ДИ',typeof forecastAbsences==='function'&&typeof linreg==='function'],
+    ['3.44 приказы',typeof orderRender==='function'&&typeof orderTpls==='function'],
+    ['3.45 a11y',typeof openShortcuts==='function'&&!!$('skipLink')],
+    ['3.46 профилирование',typeof perfReport==='function'&&typeof demoScale==='function'],
+    ['3.47 паспорта данных',Array.isArray(DATA_LINEAGE)&&DATA_LINEAGE.length>=13&&typeof exportAnonJson==='function'],
+    ['3.48 карта и саудит',Array.isArray(FEATURE_MAP)&&FEATURE_MAP.length>=13],
+  ];
+  return chk.map(([name,okv])=>({name,ok:!!okv}));
+}
+function openSelfAudit(){
+  const chk=trainSelfAudit();
+  const bad=chk.filter(x=>!x.ok);
+  openModal({title:'🧪 Саудит состава поезда 3.36–3.48',body:`
+    <div class="status ${bad.length?'err':'ok'}" style="margin-top:0">${bad.length?`Отсутствует: ${bad.map(x=>esc(x.name)).join(', ')}`:`Все ${fmtStd(chk.length,{unit:'фич'})} поезда на месте: маркеры функций найдены в сборке.`}</div>
+    <table class="rtbl"><thead><tr><th>Компонент</th><th>Статус</th></tr></thead><tbody>
+    ${chk.map(x=>`<tr><td>${esc(x.name)}</td><td>${x.ok?'<span class="pill g">на месте</span>':'<span class="pill r">отсутствует</span>'}</td></tr>`).join('')}
+    </tbody></table>`,
+    buttons:'<button class="btn ghost" data-csa>Закрыть</button>',
+    onMount(b){b.querySelector('[data-csa]').onclick=closeModal}});
+  try{teleHit('train:audit')}catch(e){}
+  return chk;
+}
+
 /* ------------------------------- 9. СВОДНАЯ ОТРИСОВКА И ИНИЦИАЛИЗАЦИЯ ------------------------------- */
 function renderWfm(){
   wfmEnsure();
@@ -11626,6 +12239,8 @@ function wfmInit(){
   bind('openDept','change',renderOpens);
   const sb=$('swapBox');
   if(sb)sb.onclick=e=>{
+    const am=e.target.closest('[data-swauto]');
+    if(am){openSwapMatch(am.dataset.swauto);return}
     const a=e.target.closest('[data-swact]');
     if(a){const[id,act]=a.dataset.swact.split('|');
       if(act==='reject'){openModal({title:'Отклонение заявки',body:`<div class="field"><label>Причина отказа</label><input class="inp" id="rjNote" placeholder="например: недостаточная квалификация, занятость"></div>`,
@@ -15234,6 +15849,15 @@ function initEvents(){
   bindClick('btnPatJson',patternsJsonDl);
   bindClick('btnPatCsv',patternsCsvDl);                  /* 3.36 */
   bindClick('btnBudgetCsv',budgetsCsvDl);                /* 3.39 */
+  bindClick('btnSwapOpen',openSwapOpenReq);   /* 3.42 */
+  bindClick('btnFcCsv',forecastAbsCsvDl);     /* 3.43 */
+  bindClick('btnOrderNew',()=>openOrderConstructor());   /* 3.44 */
+  bindClick('btnPerfTabs',()=>perfMeasureTabs());        /* 3.46 */
+  bindClick('btnPerfScale',()=>demoScale(1000));         /* 3.46 */
+  bindClick('btnLineage',openLineage);                   /* 3.47 */
+  bindClick('btnAnon',()=>exportAnonJson({}));           /* 3.47 */
+  try{const ob=$('orderBox');if(ob)ob.innerHTML=orderTpls().map(t=>`<div class="log-row"><span style="flex:1">${esc(t.name)} · источник: ${t.src==='vac'?'отпуска':t.src==='duty'?'дежурства':'произвольный'}</span><button class="btn ghost tiny" data-ord="${t.id}">открыть</button></div>`).join(''),ob.querySelectorAll('[data-ord]').forEach(b2=>b2.onclick=()=>openOrderConstructor(b2.dataset.ord))}catch(e){}   /* 3.44 */
+  const fcD=$('fcDept');if(fcD){fcD.innerHTML='<option value="all">все подразделения</option>'+state.departments.map(d=>`<option value="${d.id}">${esc(d.name)}</option>`).join('');fcD.onchange=()=>renderForecastCard()}   /* 3.43 */
   bindClick('btnBudgetRefresh',()=>{renderBudgets();renderBudgetNag();toast('Бюджет пересчитан')});   /* 3.39 */
   const cfd=$('certFcDays');if(cfd){cfd.onchange=()=>renderCertForecast();cfd.oninput=()=>{clearTimeout(cfd._t);cfd._t=setTimeout(renderCertForecast,400)}}   /* 3.41 */
   /* --- горячие клавиши --- */
@@ -15401,8 +16025,10 @@ function firstRun(){
 }
 /* ================= СТАРТ ================= */
 async function boot(){
+  perfMarkBootStart();
   initErrorHandlers();   /* как можно раньше — ловим и ошибки самой загрузки */
   state=(await loadState())||seedState();
+  try{perfMark('state:loaded')}catch(e){}   /* 3.46 */
   if(!state.rules||!state.rules.length)state.rules=clone(DEFAULT_RULES);
   if(!state.patterns||!state.patterns.length)state.patterns=clone(DEFAULT_PATTERNS);
   state.aliases=state.aliases||{};state.log=state.log||[];state.snapshots=state.snapshots||[];state.uploads=state.uploads||[];
@@ -15423,6 +16049,7 @@ async function boot(){
   applyTheme();
   initEvents();
   refreshAll();
+  try{perfMark('first:render')}catch(e){}   /* 3.46 */
   renderDb();renderProfiles();               /* заполняет все селекторы, включая подразделения */
   fillDutyCodes();
   const d0=state.departments.find(d=>d.id===state.settings.dutyDept)||state.departments.find(d=>(d.minDuty||0)>0)||state.departments[0];
@@ -15436,6 +16063,8 @@ async function boot(){
   try{renderBudgets();renderBudgetNag()}catch(e){}   /* 3.39: бюджет */
   try{initMeNotify()}catch(e){}   /* 3.40: личный дайджест */
   try{renderCertForecast()}catch(e){}   /* 3.41: прогноз допусков */
+  try{a11yInit()}catch(e){}   /* 3.45: a11y-инициализация */
+  try{renderPerfCard()}catch(e){}   /* 3.46: профилирование */
   p1Init();p2Init();
   installRoleGuards();applyRoleUi();
   try{applyModules()}catch(e){}   /* 3.16: платформа — видимость вкладок по модулям */
@@ -15449,10 +16078,13 @@ async function boot(){
   if(/^https?:$/.test(location.protocol)&&state.settings.wsAutoConnect!==false){
     setTimeout(()=>{if(!wsOn())wsConnect(defaultWsUrl(),true)},900);
   }
-  /* проверка целостности календаря */
-  const badYears=[];
-  for(let y=2010;y<=YMAX;y++){const V=yearVerify(y);if(V.official&&(V.diffWd||V.badMonths.length))badYears.push(y)}
-  if(badYears.length)console.info('Производственный календарь: расхождение с эталоном по годам '+badYears.join(', ')+' — откройте «Справочники → Сверка с эталоном» и нажмите «Привести»');
+  /* 3.46: сверка календаря не блокирует запуск — уходит в фон */
+  setTimeout(()=>{
+    const badYears=[];
+    for(let y=2010;y<=YMAX;y++){const V=yearVerify(y);if(V.official&&(V.diffWd||V.badMonths.length))badYears.push(y)}
+    if(badYears.length)console.info('Производственный календарь: расхождение с эталоном по годам '+badYears.join(', ')+' — откройте «Справочники → Сверка с эталоном» и нажмите «Привести»');
+    try{perfMark('calendar:verified')}catch(e){}
+  },1500);
   /* публичный API (для отладки, интеграций и автотестов) */
   window.APP={
     get state(){return state},set state(v){state=v},
@@ -15513,7 +16145,7 @@ async function boot(){
     sigJournalList,sigJournalAdd,sigJournalMerge,sigAckUpdate,sigAckSend,unackedSigs,updateSigBadge,openSigJournal,sigTestLocal,sigWho,
     renderBoard,kanbanRefresh,renderNetAdmin,openPermsMatrix,
     renderMyMonth,meEmp,meSetEmp,meMonthStat,meMk,meNav,printMeMonth,printSigSheet,sigSheetHtml,
-    sigCfg,playSignal,sigNotify,geoPrev,ver:'3.41',
+    sigCfg,playSignal,sigNotify,geoPrev,ver:'3.48',
     /* ===== 3.19: интерфейс и доступность ===== */
     uiPrefs,setUiPref,uiThemeMode,applyUi,cycleTheme,initUiUx,systemMotionOk,
     get THEME_NAMES(){return THEME_NAMES},
@@ -15571,6 +16203,20 @@ async function boot(){
     personalDigest,openPersonalDigest,meNotifyCfg,meNotifyCheck,initMeNotify,
     /* ===== 3.41: допуски — прогноз и риск покрытия ===== */
     certExpDate,certForecast,certReqs,certReqAdd,certReqAct,renderCertForecast,
+    /* ===== 3.42: маркетплейс обменов ===== */
+    coversTaken,coversGiven,swapOpenReq,swapCandidates,swapOffer,openSwapMatch,openSwapOpenReq,
+    /* ===== 3.43: прогнозы с ДИ ===== */
+    linreg,forecastAbsences,renderForecastCard,forecastAbsCsvDl,
+    /* ===== 3.44: конструктор приказов ===== */
+    orderTpls,orderRows,orderRender,orderDocxDl,openOrderConstructor,get DEFAULT_ORDER_TPLS(){return DEFAULT_ORDER_TPLS},
+    /* ===== 3.45: a11y волна 2 ===== */
+    get SHORTCUTS(){return SHORTCUTS},openShortcuts,a11yInit,a11yPatch,
+    /* ===== 3.46: производительность ===== */
+    get PERF(){return PERF},perfMark,perfSpan,perfReport,perfMeasureTabs,renderPerfCard,demoScale,
+    /* ===== 3.47: паспорта данных ===== */
+    get DATA_LINEAGE(){return DATA_LINEAGE},openLineage,exportAnonJson,
+    /* ===== 3.48: консолидация ===== */
+    get FEATURE_MAP(){return FEATURE_MAP},openFeatureMap,trainSelfAudit,openSelfAudit,
     /* ===== 3.37: сценарии ротаций и годовой баланс ===== */
     rotWhatIf,whatIfCsvDl,openWizardPreset,openRotWhatIf,
     brigadeYearSim,brigadeYearCsvDl,brigadeRebalance,brigadeRebalanceApply,openBrigadeYear,
@@ -15892,7 +16538,7 @@ function mgrSlidesHtml(){
   const n2=v=>parseFloat(String(v==null?0:v).replace(',','.'))||0;
   const overDuty=dutyRows.slice().sort((a,b)=>n2(b[2])-n2(a[2])).slice(0,10);
   const stamp=esc(stampPlain('rep'));
-  const ver=(window.APP&&APP.ver)||'3.41';
+  const ver=(window.APP&&APP.ver)||'3.48';
   const foot='<footer>'+esc(state.org)+' · '+esc(MUP[m-1])+' '+y+' · '+stamp+'</footer>';
   const kpi=(t,v,d)=>'<div class="kpi"><div class="kt">'+t+'</div><div class="kv">'+v+'</div><div class="kd">'+d+'</div></div>';
   const tbl=(head,rows)=>'<table><thead><tr>'+head.map(h=>'<th>'+esc(h)+'</th>').join('')+'</tr></thead><tbody>'
@@ -16269,6 +16915,17 @@ function paletteBaseItems(){
     {ic:'💰',title:'Бюджет и лимиты ФОТ',hint:'данные · 3.39',run:()=>{showTab('data');setTimeout(()=>{const c=$('budgetCardH');if(c&&c.scrollIntoView)c.scrollIntoView({behavior:'smooth',block:'center'})},250)}},
     {ic:'📨',title:'Дайджест «Мой день» (копия / .txt)',hint:'самообслуживание · 3.40',run:()=>{showTab('me');setTimeout(()=>openPersonalDigest((meEmp()||{}).id),250)}},
     {ic:'🎫',title:'Прогноз истечения допусков и риск покрытия',hint:'справочники · 3.41',run:()=>{showTab('set');setTimeout(()=>{const h=$('certFcBox');if(h&&h.scrollIntoView)h.scrollIntoView({behavior:'smooth',block:'center'});renderCertForecast()},300)}},
+    {ic:'🤖',title:'Открытая заявка на подмену + автоподбор',hint:'обмены · 3.42',run:()=>{showTab('swap');setTimeout(()=>openSwapOpenReq(),250)}},
+    {ic:'🔮',title:'Прогноз отсутствий с ДИ 95 %',hint:'аналитика · 3.43',run:()=>{showTab('an');setTimeout(()=>{const c=$('fcBox');if(c&&c.scrollIntoView)c.scrollIntoView({behavior:'smooth',block:'center'});renderForecastCard()},300)}},
+    {ic:'📜',title:'Конструктор приказов (DOCX/TXT)',hint:'отчёты · 3.44',run:()=>{showTab('rep');setTimeout(()=>openOrderConstructor(),250)}},
+    {ic:'⌨',title:'Карта клавиатурных сокращений',hint:'a11y · 3.45',run:()=>openShortcuts()},
+    {ic:'🌓',title:'Высокий контраст: вкл/выкл',hint:'a11y · 3.45',run:()=>{setUiPref('contrast',!uiPrefs().contrast);applyUi();toast(uiPrefs().contrast?'Высокий контраст включён':'Высокий контраст выключен')}},
+    {ic:'⏱',title:'Профилирование: замерить вкладки',hint:'диагностика · 3.46',run:()=>{showTab('data');setTimeout(()=>perfMeasureTabs(),250)}},
+    {ic:'🏋',title:'Нагрузочный профиль 1000 сотрудников',hint:'диагностика · 3.46',run:()=>{showTab('data');setTimeout(()=>demoScale(1000),250)}},
+    {ic:'🛂',title:'Паспорта данных: линии и хранение',hint:'НСИ · 3.47',run:()=>openLineage()},
+    {ic:'🕶',title:'Обезличенный экспорт канона (JSON)',hint:'приватность · 3.47',run:()=>exportAnonJson({})},
+    {ic:'🗺',title:'Карта фич поезда 3.36–3.48',hint:'НСИ · 3.48',run:()=>openFeatureMap()},
+    {ic:'🧪',title:'Саудит состава поезда',hint:'диагностика · 3.48',run:()=>openSelfAudit()},
     {ic:'📊',title:'Бюджет ФОТ: выгрузка CSV',hint:'экспорт · 3.39',run:()=>budgetsCsvDl()},
     {ic:'📲',title:'Установить приложение (PWA-lite)',hint:'мобильное · 3.38',run:()=>openInstallHint()},
     {ic:'👉',title:'Следующий месяц (свайп)',hint:'навигация · 3.38',run:()=>swipeMonth(1)},
