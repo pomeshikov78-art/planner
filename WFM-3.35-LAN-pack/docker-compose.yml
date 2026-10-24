@@ -1,0 +1,22 @@
+# План-табель WFM 3.31: primary + опциональная реплика (docker compose --profile ha up)
+services:
+  wfm:
+    build: .
+    ports: ["8787:8787"]
+    volumes: ["./server-data:/app/data"]
+    environment:
+      PT_DB: /app/data/canon.db          # SQLite-канон; закомментируйте для JSON
+      PT_CANON_KEY: ${PT_CANON_KEY:-}    # шифрование at rest AES-256-GCM
+      PT_USERS_FILE: /app/data/users.json
+      PT_QUOTA: ${PT_QUOTA:-}
+      PT_DIGEST_CRON: ${PT_DIGEST_CRON:-}
+    restart: unless-stopped
+  replica:
+    build: .
+    profiles: ["ha"]
+    ports: ["8788:8787"]
+    volumes: ["./server-data-replica:/app/data"]
+    environment:
+      PT_REPLICA_OF: ws://wfm:8787
+      PT_SHARED_SECRET: ${PT_SHARED_SECRET:-}
+    restart: unless-stopped

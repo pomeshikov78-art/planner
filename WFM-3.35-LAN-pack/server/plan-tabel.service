@@ -1,0 +1,22 @@
+[Unit]
+Description=План-табель WFM — сервер синхронизации ЛВС
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+# рабочая директория и путь задаются установщиком (install-service.sh)
+WorkingDirectory=/opt/plan-tabel
+ExecStart=/usr/bin/node /opt/plan-tabel/server/sync-server.mjs
+Restart=always
+RestartSec=3
+# окружение: порт, файлы канона/пользователей/сигналов, квоты, реплика и т.д.
+EnvironmentFile=-/opt/plan-tabel/server/plan-tabel.env
+User=plan-tabel
+Group=plan-tabel
+NoNewPrivileges=true
+ProtectSystem=full
+ReadWritePaths=/opt/plan-tabel
+
+[Install]
+WantedBy=multi-user.target
