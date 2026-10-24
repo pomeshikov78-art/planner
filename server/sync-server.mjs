@@ -30,6 +30,8 @@
      PT_XCHG_FILE=plan-tabel-xchg.json   3.35: журнал обмена (выгрузки/импорты, до PT_XCHG_MAX=300)
      PT_MAP_FILE=plan-tabel-xchg-map.json 3.35: справочник сопоставления кодов Т-13 ↔ причины
      PT_BRIG_FILE=plan-tabel-brigades.json 3.49: общий справочник бригад ротаций
+     PT_BRIG_QUOTA='editor:60,tab:120'        3.55: часовые квоты PUT /api/v1/brigades по ролям
+     PT_BUDGET_FILE=plan-tabel-budgets.json 3.53: общий справочник лимитов ФОТ
    Обмен 3.34: GET/POST /api/v1/tabel (табель для «1С»), POST /api/v1/skud (события СКУД → факт).
    Обмен 3.35: GET/PUT /api/v1/xchg/map — справочник сопоставления кодов Т-13 с валидацией;
    GET /api/v1/tabel?map=1c и POST /api/v1/tabel {map:"1c"} — конвертация кодов по справочнику;
@@ -114,10 +116,10 @@ const AUDIT_MEM=[];
 
 /* ---------- матрица ролей (зеркалит клиентскую ROLE_PERM) ---------- */
 const ROLE_PERM={
-  admin:{admin:1,edit:1,staff:1,import:1,sign:1,chat:1},
-  hr:{edit:1,staff:1,import:1,sign:1,chat:1},
-  editor:{edit:1,sign:1,chat:1},
-  tab:{edit:1,planOnly:1,chat:1},
+  admin:{admin:1,edit:1,staff:1,import:1,sign:1,chat:1,brig:1,budget:1},
+  hr:{edit:1,staff:1,import:1,sign:1,chat:1,brig:1,budget:1},
+  editor:{edit:1,sign:1,chat:1,brig:1},
+  tab:{edit:1,planOnly:1,chat:1,brig:1},
   viewer:{chat:0}
 };
 function permsOf(u){
@@ -175,6 +177,17 @@ function authOf(msg,sock){
 /* ---------- квоты публикаций ---------- */
 const QUOTAS={};   /* role -> лимит в сутки */
 (E('PT_QUOTA')||'').split(',').forEach(p=>{const[k,v]=p.split(':');if(k&&+v>0)QUOTAS[k.trim()]=+v});
+/* ===== 3.55: часовые квоты PUT /api/v1/brigades по ролям ===== */
+const BRIG_QUOTAS={};
+(E('PT_BRIG_QUOTA')||'').split(',').forEach(p=>{const[k,v]=p.split(':');if(k&&+v>0)BRIG_QUOTAS[k.trim()]=+v});
+const BRIG_QUOTA_USED={};
+const brigHourKey=()=>Math.floor(now()/3600000);
+function brigQuotaLeft(role){
+  const q=BRIG_QUOTAS[role||''];if(!q)return Infinity;
+  const used=BRIG_QUOTA_USED[(role||'')+':'+brigHourKey()]||0;
+  return Math.max(0,q-used);
+}
+function brigQuotaUse(role){BRIG_QUOTA_USED[(role||'')+':'+brigHourKey()]=(BRIG_QUOTA_USED[(role||'')+':'+brigHourKey()]||0)+1}
 const QUOTA_USED={};   /* 'role|YYYY-MM-DD' -> n */
 function quotaLeft(role){
   const lim=QUOTAS[role];if(lim==null)return null;
@@ -307,6 +320,11 @@ const BRIG_FILE=path.resolve(E('PT_BRIG_FILE')||path.join(__dirname,'plan-tabel-
 let BRIG=await j(BRIG_FILE,{items:[],ts:0,by:''});
 if(!BRIG||!Array.isArray(BRIG.items))BRIG={items:[],ts:0,by:''};
 const persistBrig=()=>save(BRIG_FILE,BRIG).catch(()=>{});
+/* ===== 3.53: общий справочник лимитов ФОТ (GET/PUT /api/v1/budgets) ===== */
+const BUDG_FILE=path.resolve(E('PT_BUDGET_FILE')||path.join(__dirname,'plan-tabel-budgets.json'));
+let BUDG=await j(BUDG_FILE,{items:{},ts:0,by:''});
+if(!BUDG||typeof BUDG.items!=='object'||Array.isArray(BUDG.items))BUDG={items:{},ts:0,by:''};
+const persistBudg=()=>save(BUDG_FILE,BUDG).catch(()=>{});
 /* коды унифицированной формы Т-13 (зеркалит клиентский T13_REASONS) */
 const T13_CODES=['Я','Н','РВ','С','К','ОТ','ОД','Б','ДО','У','ПР','НН','НС','В'];
 function buildAutoMap(st){
@@ -777,7 +795,11 @@ async function apiHttp(req,res,u,p){
     return sendJ(200,{ok:1,items:BRIG.items,ts:BRIG.ts||0,by:BRIG.by||'',total:BRIG.items.length});
   }
   if(p==='/api/v1/brigades'&&(req.method==='PUT'||req.method==='POST')){
-    if(USERS&&!can(AU,'staff')&&!can(AU,'admin'))return sendJ(403,{err:'нужны права ведения справочников (staff) или администратора'});
+    if(USERS&&!can(AU,'staff')&&!can(AU,'admin')&&!can(AU,'brig'))return sendJ(403,{err:'нужны права brig, staff или администратора'});
+    if(brigQuotaLeft(AU.role||'anon')===0){
+      await audit('brig-quota','превышена часовая квота PUT бригад для роли '+(AU.role||'anon'),{login:AU.login});
+      return sendJ(429,{err:'часовая квота PUT бригад исчерпана',retryAfterMin:60-new Date().getMinutes()});
+    }
     if(!Array.isArray(m.items))return sendJ(400,{err:'ожидается {items:[{id,name,patId,anchor,offset,members,ts?}]}'});
     if(m.items.length>200)return sendJ(400,{err:'слишком много бригад (максимум 200)'});
     const errors=[];const byId={};BRIG.items.forEach(it=>byId[it.id]=it);
@@ -797,11 +819,46 @@ async function apiHttp(req,res,u,p){
       byId[id]=rec;touched++;
     });
     if(errors.length)return sendJ(400,{ok:0,errors});
+    brigQuotaUse(AU.role||'anon');
     BRIG={items:Object.values(byId),ts:now(),by:AU.login||'api'};
     await persistBrig();
     broadcast({type:'brigades',ts:BRIG.ts,by:BRIG.by,total:BRIG.items.length});
     await audit('brigades','справочник бригад: сохранено/обновлено '+touched+' из '+BRIG.items.length,{login:AU.login});
-    return sendJ(200,{ok:1,saved:touched,total:BRIG.items.length,ts:BRIG.ts,by:BRIG.by});
+    return sendJ(200,{ok:1,saved:touched,total:BRIG.items.length,ts:BRIG.ts,by:BRIG.by,quotaLeft:brigQuotaLeft(AU.role||'anon')===Infinity?null:brigQuotaLeft(AU.role||'anon')});
+  }
+  /* ===== 3.53: лимиты ФОТ по подразделениям и месяцам ===== */
+  if(p==='/api/v1/budgets'&&req.method==='GET'){
+    return sendJ(200,{ok:1,items:BUDG.items,ts:BUDG.ts||0,by:BUDG.by||'',total:Object.keys(BUDG.items).length});
+  }
+  if(p==='/api/v1/budgets'&&(req.method==='PUT'||req.method==='POST')){
+    if(USERS&&!can(AU,'staff')&&!can(AU,'admin')&&!can(AU,'budget'))return sendJ(403,{err:'нужны права staff, admin или budget'});
+    if(!m.items||typeof m.items!=='object'||Array.isArray(m.items))return sendJ(400,{err:'ожидается {items:{"YYYY-MM":{deptId:лимит|null}}}'});
+    const mks=Object.keys(m.items);
+    if(mks.length>240)return sendJ(400,{err:'слишком много месяцев (максимум 240)'});
+    const errors=[];let touched=0;
+    mks.forEach(mk=>{
+      if(!/^\d{4}-\d{2}$/.test(mk)||+mk.slice(5,7)<1||+mk.slice(5,7)>12){errors.push({mk,err:'формат месяца YYYY-MM (01–12)'});return}
+      const lim=m.items[mk];
+      if(!lim||typeof lim!=='object'||Array.isArray(lim)){errors.push({mk,err:'ожидается объект лимитов по подразделениям'});return}
+      const deps=Object.keys(lim);
+      if(deps.length>100){errors.push({mk,err:'слишком много подразделений (максимум 100)'});return}
+      const rec={limits:{},ts:+lim.ts||now(),by:AU.login||'api'};
+      deps.forEach(did=>{
+        if(did==='ts'||did==='by')return;
+        const v=lim[did];
+        if(v!==null&&(typeof v!=='number'||!isFinite(v)||v<0)){errors.push({mk,dept:did,err:'лимит — число ≥ 0 или null'});return}
+        rec.limits[String(did).slice(0,40)]=v;
+      });
+      const ex=BUDG.items[mk];
+      if(ex&&(ex.ts||0)>rec.ts)return;   /* last-write-wins по ts месяца */
+      BUDG.items[mk]=rec;touched++;
+    });
+    if(errors.length)return sendJ(400,{ok:0,errors});
+    BUDG.ts=now();BUDG.by=AU.login||'api';
+    await persistBudg();
+    broadcast({type:'budgets',ts:BUDG.ts,by:BUDG.by,total:Object.keys(BUDG.items).length});
+    await audit('budgets','лимита ФОТ: месяцев обновлено '+touched+' из '+Object.keys(BUDG.items).length,{login:AU.login});
+    return sendJ(200,{ok:1,saved:touched,total:Object.keys(BUDG.items).length,ts:BUDG.ts,by:BUDG.by});
   }
   return sendJ(404,{err:'неизвестный метод API; см. README: /api/v1 login|canon|push|ops|sigs|signal|users|tabel|skud|ocr|xchg/map|xchg/log|xchg/retry|brigades'});
 }
@@ -1520,6 +1577,7 @@ server.listen(PORT,HOST,()=>{
   console.log(`   REST API: http://localhost:${PORT}/api/v1 (login, canon, push, ops, tabel, skud, ocr, sigs, signal, users)`);
   console.log(`   обмен 3.35: /api/v1/xchg/map (сопоставление кодов Т-13), /api/v1/xchg/log (журнал выгрузок/импортов), /api/v1/xchg/retry (повтор)`);
   console.log(`   бригады 3.49: GET/PUT /api/v1/brigades (общий справочник бригад, файл ${path.basename(BRIG_FILE)})`);
+  console.log(`   бюджеты 3.53: GET/PUT /api/v1/budgets (лимита ФОТ, файл ${path.basename(BUDG_FILE)})`);
   console.log(`   журнал обмена: ${XCHG_FILE} (до ${XCHG_MAX} записей)${XCHG.items.length?' · сейчас '+XCHG.items.length:''}`);
   if(SSO_HEADER)console.log(`   SSO: доверенный заголовок «${SSO_HEADER}» → роль ${SSO_ROLE}${SSO_PROVISION?' (авторегистрация вкл)':' (только существующие учётки)'}`);
   if(REPLICA_OF)console.log(`   режим: РЕПЛИКА от ${REPLICA_OF}`);
