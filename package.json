@@ -1,0 +1,25 @@
+{
+  "name": "wfm",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "test": "bash tests/ci-336.sh",
+    "test:smoke": "node tests/smoke-336.mjs План-табель-WFM-3.36.html",
+    "test:smoke:offline": "node tests/smoke-336.mjs План-табель-WFM-3.36-offline.html",
+    "test:ux": "node tests/ux-336.mjs План-табель-WFM-3.36.html",
+    "test:ux:offline": "node tests/ux-336.mjs План-табель-WFM-3.36-offline.html"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "План-табель служебной деятельности · WFM 3.36 — конструктор ротаций, бригады и доктор покрытия",
+  "dependencies": {
+    "jsdom": "^29.1.1",
+    "jszip": "^3.10.2",
+    "playwright-core": "^1.64.1",
+    "sql.js": "^1.14.2",
+    "tesseract.js": "^7.0.0",
+    "tesseract.js-core": "^7.0.0",
+    "ws": "^8.22.0"
+  }
+}

@@ -1,7 +1,6 @@
 
 
 
-
 <!DOCTYPE html>
 <html lang="ru">
 <head>
@@ -1359,6 +1358,7 @@ html[data-theme=dark] body.cvd{--viz1:#56B4E9;--viz2:#009E73;--viz3:#E69F00;--vi
         <div class="lbl">Бригады · сохранённые ротации <span class="pill" id="brigCount">0</span></div>
         <div id="brigBox"></div>
         <button class="btn ghost small wide" id="btnBrigApplyAll" style="margin-top:6px" hidden>▶ Применить все бригады к месяцу</button>
+        <button class="btn ghost small wide" id="btnBrigPrint" style="margin-top:6px" hidden>🖨 Бригадная ведомость (печать)</button>
         <div class="hint" style="margin-top:6px">3.36: бригады создаёт мастер ротаций в режиме «веер по бригадам» — фазы разведены для ровного покрытия суток. Состав хранится в общей базе и синхронизируется по ЛВС.</div>
       </div>
       <div class="card">
@@ -3769,6 +3769,7 @@ function showHelp(){
         <li><b>Бригады в общей базе</b> (<code>state.brigades</code>): сохранённый состав (карточка «Бригады» на «Планировании») — применение к любому месяцу в один клик со сквозной фазой от якоря; отсутствия (отпуск, больничный, командировка) сохраняются всегда; синхронизируется по ЛВС вместе с каноном.</li>
         <li><b>Доктор покрытия</b> («Планирование → 🩺 Покрытие»): календарь дефицитов дня против минимума (дежурства или все явки), рекомендации с оценкой: пожелания («не ставить» — жёсткое исключение, «предпочтительно» — приоритет +40), справедливость (дежурства против среднего по отделу), загрузка месяца, отдых после суточных/ночных, серии рабочих дней и недельные часы против правил, допуски; назначение по одному или «✔ Применить все рекомендации» (оценка ≥ 40); все правки идут через операционный протокол и доступны к отмене (Ctrl+Z).</li>
         <li><b>Конструктор ротации</b>: генерация цикла из параметров «N рабочих / M выходных» с чередованием день/ночь, живой проверкой норм до сохранения; каталог — дублирование «⧉», экспорт JSON/CSV с паспортами; предупреждение о неизвестных кодах при добавлении шаблона.</li>
+        <li><b>Волна 2 (НСИ и поверхности)</b>: доктор покрытия — интерактивный отчёт по 5 критериям с выгрузкой CSV со штампом («⇩ CSV»); виджеты 3.36 внесены в паспорт виджетов и реестр отчётов; телеметрия использования новых поверхностей (pt.tele); «Мой месяц» — карточка «Моя бригада» с лентой личной ротации; «🖨 Бригадная ведомость» — печатная форма «бригады × дни месяца» (альбомная, светлая, итоги дежурств и часов).</li>
       </ul>
       <div class="lbl" style="margin-top:12px">Новое в версии 3.35 — коннектор «1С», веб-панель обмена, UX-волна</div>
       <ul class="hint" style="margin:6px 0 18px;line-height:1.6">
@@ -6441,7 +6442,11 @@ const WIDGET_REGISTRY=[
   {id:'anOlap',tab:'an',name:'OLAP-срез произвольных измерений',form:'сводная таблица строки × колонки × мера, ступенчатая палитра, итоги',source:'канон: план года, срез подразделения'},
   {id:'anTop',tab:'an',name:'Топ-10 по нагрузке',form:'таблица-рейтинг',source:'канон: план года'},
   {id:'anBrad',tab:'an',name:'Индекс Брэдфорда',form:'таблица-рейтинг',source:'канон: план за 52 недели'},
-  {id:'repMatrix',tab:'rep',name:'Каталог форм',form:'матрица «тип сообщения → формы»',source:'константа каталога REPORT_FORM_MATRIX'}
+  {id:'repMatrix',tab:'rep',name:'Каталог форм',form:'матрица «тип сообщения → формы»',source:'константа каталога REPORT_FORM_MATRIX'},
+  {id:'rotPassport',tab:'set',name:'Паспорт шаблона ротации',form:'таблица метрик цикла + вердикт ТК РФ со списком замечаний',source:'канон: state.patterns, reasons, rules'},
+  {id:'brigCard',tab:'plan',name:'Бригады · сохранённые ротации',form:'список: состав, смещение фазы, применение к месяцу, печать ведомости',source:'канон: state.brigades, план открытого месяца'},
+  {id:'covDoctor',tab:'plan',name:'Доктор покрытия',form:'календарь дефицитов + рекомендации с оценкой, причинами и рисками',source:'канон: план открытого месяца, правила, пожелания, допуски'},
+  {id:'covWizard',tab:'plan',name:'Мастер ротаций: предпросмотр покрытия',form:'календарь покрытия по дням (веер по бригадам) с подсветкой дефицита',source:'канон: state.patterns, минимум подразделения'}
 ];
 function widgetsPassport(){
   return WIDGET_REGISTRY.map(w=>Object.assign({},w,{stamp:stampPlain(w.tab),ver:(window.APP&&APP.ver)||''}));
@@ -6540,7 +6545,8 @@ const INTERACTIVE_REPORTS=[
   {id:'anDiv',name:'Отклонения «план–факт»',tab:'an',crit:{filter:1,drill:0,live:1,insight:1,export:1},note:'дивергент вокруг нуля'},
   {id:'anCorr',name:'Корреляционная матрица',tab:'an',crit:{filter:1,drill:0,live:1,insight:0,export:1},note:'просмотрная с фильтром'},
   {id:'repMatrix',name:'Каталог форм',tab:'rep',crit:{filter:0,drill:0,live:0,insight:0,export:1},note:'справочник НСИ — статичный'},
-  {id:'mgrSlides',name:'Доклад-презентация руководителя',tab:'rep',crit:{filter:0,drill:0,live:1,insight:1,export:1},note:'печатная форма — статичная'}];
+  {id:'mgrSlides',name:'Доклад-презентация руководителя',tab:'rep',crit:{filter:0,drill:0,live:1,insight:1,export:1},note:'печатная форма — статичная'},
+  {id:'covDoctor',name:'Доктор покрытия',tab:'plan',crit:{filter:1,drill:1,live:1,insight:1,export:1},note:'3.36: фильтры подразделения/минимума/режима, детализация до кандидата и дня, живой пересчёт, вывод-календарь дефицитов, экспорт CSV со штампом'}];
 function reportClass(r){
   const c=r.crit||{},n=['filter','drill','live','insight','export'].filter(k=>c[k]).length;
   return n===5?'интерактивный':n>=3?'частично интерактивный':'просмотрный (статичный)';
@@ -10472,6 +10478,7 @@ function rotStripHtml(seq){
   return `<span class="rot-strip" role="img" aria-label="Цикл ${seq.length} дн.: ${esc(seq.join(', '))}">${seq.slice(0,31).map(rotChipHtml).join('')}${seq.length>31?`<span class="rot-chip rest">+${fmtStd(seq.length-31)}</span>`:''}</span>`;
 }
 function openPatternPassport(patId){
+  try{teleHit('rot:passport')}catch(e){}
   const pat=patById(patId)||(state.patterns||[])[0];
   if(!pat){toast('Шаблонов ротаций нет — добавьте в справочниках','err');return}
   const pp=patternPassport(pat);
@@ -10534,6 +10541,7 @@ function pcAutoName(p){
   return `${String(p.wCode||'').toUpperCase()}${a} · ${p.work}/${p.rest}`;
 }
 function openPatternConstructor(){
+  try{teleHit('rot:construct')}catch(e){}
   const rs=state.reasons||[];
   const workRs=rs.filter(r=>r.coeff>0&&r.hmode!=='none');
   const wOpts=workRs.map(r=>`<option value="${esc(r.code)}"${r.code==='Д1'?' selected':''}>${esc(r.code)} — ${esc(r.name)}${r.hours?` (${r.hours} ч)`:''}</option>`).join('');
@@ -10678,6 +10686,7 @@ function applyPatternFan(patId,es,y,m,anchor,keep,brig,opt){
     }
     bust();save(true);refreshAll();
     audit('Ротация по бригадам',`${pat.name} · ${offs.length} бриг. · ${es.length} чел. · ${MUP[m-1]} ${y} · якорь ${base} · ${n} ячеек`,`plan:${mkOf(y,m)}`,{after:pat.seq,brigades:offs.length,offsets:offs});
+    try{teleHit('rot:fan')}catch(e){}
     toast(`Ротация «${pat.name}»: ${offs.length} бриг. · ${n} отметок · смещения фаз ${offs.join('/')}`,'ok');
     return{n,groups};
   };
@@ -10689,6 +10698,7 @@ function renderBrigades(){
   const bl=brigadeList();
   const cnt=$('brigCount');if(cnt)cnt.textContent=String(bl.length);
   const all=$('btnBrigApplyAll');if(all)all.hidden=!bl.length;
+  const bp=$('btnBrigPrint');if(bp){bp.hidden=!bl.length;bp.onclick=()=>printBrigadeSheet()}
   box.innerHTML=bl.length?bl.map(b=>{
     const pat=patById(b.patId);
     const names=(b.members||[]).map(id=>{const e=emp(id);return e&&!e.fired?e.name:null}).filter(Boolean);
@@ -10741,6 +10751,7 @@ function applyBrigadeToMonth(brigId,y,m){
     }finally{WFM_BYPASS=0}
     bust();save(true);refreshAll();
     audit('Применение бригады',`${b.name} · ${MUP[m-1]} ${y} · ${es.length} чел. · ${n} ячеек`,`plan:${mkOf(y,m)}`);
+    try{teleHit('rot:brigade')}catch(e){}
     toastUndo(`Бригада «${b.name}»: ${n} отметок за ${MUP[m-1]} ${y}`);
     return n;
   };
@@ -10878,6 +10889,7 @@ function coverageApply(scan,picks){
     });
     bust();save(true);refreshAll();
     audit('Доктор покрытия',`${(dept(deptId)||{}).name||'—'} · ${MUP[m-1]} ${y} · назначено ${n}${skip?`, отклонено ${skip} (отсутствие)`:''} · код ${code}`,`plan:${mkOf(y,m)}`,{picks:n});
+    try{teleHit('covdoctor:apply')}catch(e){}
     toastUndo(`Доктор покрытия: назначено ${fmtStd(n)}${skip?` · пропущено ${fmtStd(skip)} (появились отсутствия)`:''}`);
     return n;
   };
@@ -10903,9 +10915,10 @@ function openCoverageDoctor(preset){
       </select></div>
     </div>
     <div id="cdBody" style="margin-top:10px"></div>`,
-    buttons:`<button class="btn ghost" data-ccd>Закрыть</button><button class="btn" id="cdApplyAll" title="Назначить лучших кандидатов (оценка ≥ 40) на все дни с дефицитом">✔ Применить все рекомендации</button>`,
+    buttons:`<button class="btn ghost" data-ccd>Закрыть</button><button class="btn ghost" id="cdCsv" title="Выгрузить скан покрытия и рекомендации в CSV со штампом">⇩ CSV</button><button class="btn" id="cdApplyAll" title="Назначить лучших кандидатов (оценка ≥ 40) на все дни с дефицитом">✔ Применить все рекомендации</button>`,
     onMount(b){
       let scan=null;
+      try{teleHit('covdoctor')}catch(e){}   /* 3.36: телеметрия использования */
       const redraw=()=>{
         const depId=b.querySelector('#cdDept').value;
         scan=coverageScan(cur.y,cur.m,depId,{
@@ -10967,6 +10980,7 @@ function openCoverageDoctor(preset){
         });
       };
       b.querySelector('[data-ccd]').onclick=closeModal;
+      b.querySelector('#cdCsv').onclick=()=>coverageCsvDl(scan);   /* 3.36: экспорт скана */
       b.querySelector('#cdDept').onchange=()=>{
         const dp=dept(b.querySelector('#cdDept').value);
         if(dp){b.querySelector('#cdNeed').value=dp.minDuty||1;if(dp.dutyCode)b.querySelector('#cdCode').value=dp.dutyCode}
@@ -11008,6 +11022,67 @@ function openCoverageDoctor(preset){
       if(preset.code)b.querySelector('#cdCode').value=preset.code;
       redraw();
     }});
+}
+
+/* ---- волна 2: экспорт скана покрытия и печатная бригадная ведомость ---- */
+PRINT_WIDE.add('brig');   /* 3.36: ведомость широкая — альбомная ориентация в авто-режиме */
+function coverageCsvDl(scan){
+  if(!scan){toast('Нет данных для выгрузки — откройте доктора покрытия','err');return}
+  const dp=(dept(scan.deptId)||{});
+  const rows=[['Покрытие по дням · '+(dp.name||'—'),MUP[scan.m-1]+' '+scan.y,'минимум в сутки',scan.need,
+    'учёт',scan.mode==='duty'?'дежурства':'все явки','код назначения',scan.code,'штамп',stampPlain('plan')],[]];
+  rows.push(['Дата','День недели','План','Минимум','Дефицит','Избыток','В покрытии (ФИО)']);
+  scan.days.forEach(x=>rows.push([pad2(x.d),WD[x.wd],x.plan,x.need,x.deficit||'',x.over||'',
+    x.on.map(id=>empName(id)).join('; ')]));
+  if(scan.defDays.length){
+    rows.push([]);
+    rows.push(['Рекомендации доктора покрытия (топ по оценке)']);
+    rows.push(['Дата','№','Кандидат','Оценка','Причины (бонусы)','Риски (штрафы)']);
+    scan.defDays.forEach(x=>{
+      coverageCandidates(scan,x.d,3).list.forEach((c,i)=>rows.push(
+        [pad2(x.d)+' '+WD[x.wd],i+1,c.name,c.score,c.why.join('; '),c.viol.join('; ')]));
+    });
+  }
+  downloadCsv('pokrytie-'+(scan.deptId||'all')+'-'+mkOf(scan.y,scan.m)+'.csv',rows);
+  audit('Выгрузка покрытия',`${dp.name||'—'} · ${MUP[scan.m-1]} ${scan.y} · CSV · дней ${scan.DIM}, дефицитных ${scan.defDays.length}`,'coverage');
+  try{teleHit('covdoctor:csv')}catch(e){}
+  toast('Покрытие выгружено в CSV','ok');
+}
+function printBrigadeSheet(){
+  const bl=brigadeList();
+  if(!bl.length){toast('Сохранённых бригад нет — создайте в мастере ротаций','err');return}
+  const{y,m}=cur,DIM=dim(y,m);
+  const head='<tr><th style="min-width:150px">Бригада / сотрудник</th>'+
+    Array.from({length:DIM},(_,i)=>`<th class="n">${i+1}</th>`).join('')+
+    '<th class="n">Дежурств</th><th class="n">Часов</th></tr>';
+  let rows='';
+  bl.forEach(b=>{
+    const pat=patById(b.patId);
+    rows+=`<tr><td colspan="${DIM+3}" style="background:#eef1f7;font-weight:700">${esc(b.name)}${pat?` · шаблон «${esc(pat.name)}» (${esc(pat.seq)}) · смещение фазы ${fmtStd(b.offset||0,{unit:'дн'})} · якорь ${esc(b.anchor||'—')}`:''}</td></tr>`;
+    (b.members||[]).forEach(eid=>{
+      const e=emp(eid);if(!e)return;
+      let cnt=0,hh=0,td='';
+      for(let d=1;d<=DIM;d++){
+        const raw=getCode(eid,y,m,d),c=raw?parseCell(raw).code:'';
+        const r=raw?reason(c):null,di=dayInfo(y,m,d);
+        if(r&&r.cat==='duty'){cnt++;hh+=hoursFor(eid,y,m,d)}
+        td+=`<td class="n" style="${di.off?'background:#fdf0ef;':''}${r&&r.cat==='duty'?'font-weight:700':''}">${esc(c||'')}</td>`;
+      }
+      rows+=`<tr><td>${esc(e.name)}${e.pos?' · '+esc(e.pos):''}</td>${td}<td class="n"><b>${cnt}</b></td><td class="n">${fmt1(hh)}</td></tr>`;
+    });
+  });
+  /* 34 колонки — всегда альбомно, независимо от пользовательской настройки ориентации */
+  $('printArea').innerHTML='<style>@page{size:A4 landscape;margin:8mm}</style>'+`<h1>${esc(state.org)}</h1>
+    <div class="ph-sub">Бригадная ведомость ротации за ${MUP[m-1]} ${y} г. · бригад: ${bl.length} · сформировано ${esc(stampPlain('plan'))}</div>
+    <table><thead>${head}</thead><tbody>${rows}</tbody></table>
+    <div class="pnote">Фаза сквозная: цикл продолжается от даты-якоря через границу месяца. Отсутствия (отпуск, больничный, командировка) приоритетнее шаблона бригады. Дежурств и часов — итоги месяца по явным отметкам.</div>`;
+  const keep=$('printHead').innerHTML;
+  $('printHead').innerHTML=`<h1>${esc(state.org)}</h1>`;
+  try{window.print()}catch(err){}
+  setTimeout(()=>{$('printArea').innerHTML='';$('printHead').innerHTML=keep},600);
+  try{teleHit('rot:brigprint')}catch(e){}
+  audit('Печать бригадной ведомости',`${MUP[m-1]} ${y} · бригад ${bl.length}`,'brigades');
+  toast('Бригадная ведомость отправлена на печать','ok');
 }
 
 
@@ -15023,6 +15098,7 @@ async function boot(){
     rotChipHtml,rotStripHtml,openPatternPassport,openAllPassports,openPatternConstructor,buildSeqFromParams,pcAutoName,
     fanOffsets,brigadesRecommend,splitBrigades,applyPatternFan,brigadeList,renderBrigades,applyBrigadeToMonth,applyAllBrigades,
     coverageScan,coverageCandidates,coverageApply,openCoverageDoctor,patternsJsonDl,patternsCsvDl,
+    coverageCsvDl,printBrigadeSheet,
     /* ===== 3.18: операционный протокол, квартальный лист, заявки «Мой месяц», OCR, подсказки ===== */
     opsQueue,opsFlush,opsActive,opsEnqueue,opsSnapshot,opsRollback,opsFallbackSchedule,get OPS(){return window.__PT_OPS},
     sigQuarterHtml,sigQuarterRanges,sigQuarterSheet,openSigQuarterModal,sigFetchRange,
@@ -15712,6 +15788,7 @@ function paletteBaseItems(){
     {ic:'📋',title:'Паспорта шаблонов ротаций (нормы ТК РФ)',hint:'справочники · 3.36',run:()=>{showTab('set');setTimeout(()=>openAllPassports(),300)}},
     {ic:'➕',title:'Конструктор ротации: шаблон из параметров N/M',hint:'справочники · 3.36',run:()=>{showTab('set');setTimeout(()=>openPatternConstructor(),300)}},
     {ic:'👥',title:'Бригады: сохранённые ротации на месяц',hint:'планирование · 3.36',run:()=>{showTab('plan');setTimeout(()=>{const c=$('brigCard');if(c&&c.scrollIntoView)c.scrollIntoView({behavior:systemMotionOk()?'smooth':'auto',block:'center'})},320)}},
+    {ic:'🖨',title:'Бригадная ведомость (печать)',hint:'вывод · 3.36',run:()=>{showTab('plan');setTimeout(()=>printBrigadeSheet(),300)}},
     {ic:'❓',title:'Справка и горячие клавиши',hint:'F1',run:()=>showHelp()}
   );
   return items;
@@ -19192,6 +19269,25 @@ function renderMyMonth(){
   <div class="card"><h3>Мои пожелания по дежурствам<span class="sub">учитываются автозаполнением и годовым ростером</span></h3>
     ${myWishes.length?myWishes.map(w=>`<div class="log-row"><span>${w.kind==='pref'?'<span class="pill g">предпочтительно ставить</span>':'<span class="pill r">не ставить</span>'} · ${esc(w.from.split('-').reverse().join('.'))} → ${esc(w.to.split('-').reverse().join('.'))}</span></div>`).join(''):'<div class="hint">Пожеланий на месяц нет — их добавляет табельщик в «Дежурства → Пожелания».</div>'}
   </div>`;
+  /* 3.36: «Моя бригада» — сотрудник видит свою ротацию со сквозной фазой */
+  try{
+    const myBr=brigadeList().find(b=>(b.members||[]).includes(e.id));
+    const myPat=myBr?patById(myBr.patId):null;
+    if(myBr&&myPat){
+      const myAnchor=addDays(myBr.anchor||`${y}-${pad2(m)}-01`,-(myBr.offset||0));
+      const DIMm=dim(y,m);
+      let myCells='';
+      for(let d=1;d<=DIMm;d++){
+        const c=patternCodeAt(myPat,myAnchor,y,m,d),di=dayInfo(y,m,d);
+        const mine=getCode(e.id,y,m,d);
+        myCells+=`<span class="pwcell${di.off?' off':''}${isToday(y,m,d)?' today':''}" title="${d} ${WD[di.wd]}: ${c?esc(c):'выходной'}${mine?' · отметка: '+esc(mine):''}"><em>${d}</em>${c?esc(c):'·'}</span>`;
+      }
+      box.insertAdjacentHTML('afterbegin',`<div class="card" id="meBrigCard"><h3>Моя бригада<span class="sub">3.36 · ротация со сквозной фазой от якоря</span></h3>
+        <div class="hint" style="margin-top:0"><b>${esc(myBr.name)}</b> · шаблон «${esc(myPat.name)}» (${esc(myPat.seq)}) · смещение фазы ${fmtStd(myBr.offset||0,{unit:'дн'})} · якорь ${esc(myBr.anchor||'—')} · состав: ${fmtStd((myBr.members||[]).length,{unit:'чел'})}</div>
+        <div class="pwstrip" style="margin-top:8px" role="img" aria-label="Моя ротация на ${MUP[m-1]} ${y}: цикл ${esc(myPat.seq)}">${myCells}</div>
+        <div class="hint" style="margin-top:6px">Цикл продолжается через границу месяца без сбоя: фаза считается от даты-якоря бригады. Состав бригады обновляет табельщик.</div></div>`);
+    }
+  }catch(err){}
   box.querySelectorAll('[data-meack]').forEach(b=>b.onclick=()=>sigAckSend(b.dataset.meack));
   box.querySelectorAll('[data-mevacx]').forEach(b=>b.onclick=()=>meVacWithdraw(b.dataset.mevacx));
   box.querySelectorAll('[data-meswx]').forEach(b=>b.onclick=()=>meSwapCancel(b.dataset.meswx));
