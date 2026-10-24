@@ -1,7 +1,6 @@
 
 
 
-
 <!DOCTYPE html>
 <html lang="ru">
 <head>
@@ -3769,9 +3768,9 @@ function showHelp(){
       <div class="lbl" style="margin-top:12px">Новое в версии 3.37 — сценарии ротаций и годовой баланс</div>
       <ul class="hint" style="margin:6px 0 18px;line-height:1.6">
         <li><b>What-if «бригады против покрытия»</b> («🧮» в карточке «Бригады» и палитра): таблица сценариев B = 1…min(штат, цикл) — покрытие мин/макс в сутки, дефицитные дни месяца, дежурства и часы на человека; подсветка оптимума (без дефицита, минимальный избыток), строка «нужно человек на минимум N» (цикл / рабочих × N); «принять» открывает мастер ротаций с готовыми параметрами; выгрузка сценариев в CSV со штампом.</li>
-        <li><b>Годовой баланс бригад</b> («⚖»): по фазам бригад за год считаются дежурства на человека (мин–макс по составу), конфликты с пожеланиями «не ставить» (ротация ставит смену в запрещённую дату) и попадания в «предпочтительно»; сводка: среднее, разброс (SD), конфликты. <b>Ребалансировка</b> — жадные обмены сотрудниками между бригадами (до 3 проходов, состав и размеры сохраняются), снижают конфликты и SD; меняет только `state.brigades`, отметки плана не трогает; отчёт по сотрудникам — в CSV.</li>
+        <li><b>Годовой баланс бригад</b> («⚖»): по фазам бригад за год считаются дежурства на человека (мин–макс по составу), конфликты с пожеланиями «не ставить» (ротация ставит смену в запрещённую дату) и попадания в «предпочтительно»; сводка: среднее, разброс (SD), конфликты. <b>Ребалансировка</b> — жадные обмены сотрудниками между бригадами (до 3 проходов, состав и размеры сохраняются), снижают конфликты и SD; меняет только <code>state.brigades</code>, отметки плана не трогает; отчёт по сотрудникам — в CSV.</li>
         <li><b>ICS-экспорт ротаций</b>: «⤓ ICS ротации бригад (год)» в карточке «Бригады» и «⤓ ICS моей ротации» в «Мой месяц → Моя бригада» (а также палитра) — событийный календарь VCALENDAR/VEVENT (целодневные события на каждую смену, UID стабилен, SUMMARY «код · ФИО (бригада)»); даты, попавшие в пожелание «не ставить», не публикуются.</li>
-        <li><b>НСИ и телеметрия</b>: виджеты `rotWhatIf` и `brigYear` в паспорте виджетов; what-if и годовой баланс — интерактивные отчёты 5/5 в реестре; счётчики pt.tele: `rot:whatif`, `rot:whatif:csv`, `rot:year`, `rot:year:csv`, `rot:rebalance`, `rot:ics`.</li>
+        <li><b>НСИ и телеметрия</b>: виджеты <code>rotWhatIf</code> и <code>brigYear</code> в паспорте виджетов; what-if и годовой баланс — интерактивные отчёты 5/5 в реестре; счётчики pt.tele: <code>rot:whatif</code>, <code>rot:whatif:csv</code>, <code>rot:year</code>, <code>rot:year:csv</code>, <code>rot:rebalance</code>, <code>rot:ics</code>.</li>
       </ul>
       <div class="lbl" style="margin-top:12px">Новое в версии 3.36 — конструктор ротаций, бригады и доктор покрытия</div>
       <ul class="hint" style="margin:6px 0 18px;line-height:1.6">
@@ -11162,11 +11161,14 @@ function openWizardPreset(o){
   patternWizard();
   setTimeout(()=>{
     const b=$('modalBox');if(!b)return;
+    /* сначала шаблон/отдел (их change пересчитывает авто-бригады), затем бригада/минимум */
     if(o.patId){const el=b.querySelector('#pwPat');if(el)el.value=o.patId}
     if(o.deptId){const el=b.querySelector('#pwDept');if(el)el.value=o.deptId}
-    if(o.need!=null){const el=b.querySelector('#pwNeed');if(el)el.value=o.need}
+    ['pwPat','pwDept'].forEach(id=>{
+      const el=b.querySelector('#'+id);if(el)el.dispatchEvent(new Event('change'))});
     if(o.brig){const el=b.querySelector('#pwBrig');if(el)el.value=o.brig}
-    ['pwPat','pwDept','pwNeed','pwBrig'].forEach(id=>{
+    if(o.need!=null){const el=b.querySelector('#pwNeed');if(el)el.value=o.need}
+    ['pwNeed','pwBrig'].forEach(id=>{
       const el=b.querySelector('#'+id);if(el)el.dispatchEvent(new Event('change'))});
   },160);
 }
