@@ -1384,7 +1384,287 @@ def V348(c):
     get FEATURE_MAP(){return FEATURE_MAP},openFeatureMap,trainSelfAudit,openSelfAudit,""", 'exports 348')
 
 
-SPECS = [('3.38', V338), ('3.39', V339), ('3.40', V340), ('3.41', V341), ('3.42', V342), ('3.43', V343), ('3.44', V344), ('3.45', V345), ('3.46', V346), ('3.47', V347), ('3.48', V348)]
+
+# ============================== 3.49 СЕРВЕРНЫЙ КОНТУР БРИГАД ==============================
+MODULE_349 = r"""/* ================= 3.49: СЕРВЕРНЫЙ КОНТУР БРИГАД =================
+   Общий справочник бригад на сервере ЛВС: GET/PUT /api/v1/brigades
+   (файл PT_BRIG_FILE, права staff/admin, аудит, WS-трансляция {type:'brigades'});
+   клиент: кнопки «⇪ На сервер» / «⇩ С сервера», merge last-write-wins по ts,
+   авто-подтягивание при событии WS. */
+function brigItems(){
+  return brigadeList().map(b=>({id:b.id,name:b.name,patId:b.patId,anchor:b.anchor||'',
+    offset:b.offset||0,members:b.members||[],ts:b.ts||0}));
+}
+async function brigadesPush(){
+  if(!/^https?:$/.test(location.protocol)){toast('Выгрузка бригад на сервер доступна при работе по HTTP (сервер ЛВС)','err');return 0}
+  try{
+    const hd={'Content-Type':'application/json'};if(wsToken())hd.Authorization='Bearer '+wsToken();
+    const r=await fetch('api/v1/brigades',{method:'PUT',headers:hd,body:JSON.stringify({items:brigItems()})});
+    const j=await r.json();
+    if(j.ok){
+      brigadeList().forEach(b=>{b.ts=b.ts||Date.now()});save(true);
+      logAct('Бригады','выгружены на сервер ('+j.saved+' из '+j.total+')');
+      try{teleHit('brig:push')}catch(e){}
+      toast('Бригады на сервере: обновлено '+fmtStd(j.saved)+' из '+fmtStd(j.total),'ok');
+      return j.saved;
+    }
+    toast('Сервер отклонил бригады: '+(j.err||(j.errors||[]).map(e=>e.err).join('; ')||'HTTP '+r.status),'err');
+    return 0;
+  }catch(e){toast('Сервер ЛВС недоступен: '+String(e.message||e).slice(0,100),'err');return 0}
+}
+async function brigadesPull(){
+  if(!/^https?:$/.test(location.protocol)){toast('Доступно при работе по HTTP (сервер ЛВС)','err');return 0}
+  try{
+    const r=await fetch('api/v1/brigades'+(wsToken()?'?token='+encodeURIComponent(wsToken()):''),{cache:'no-store'});
+    const j=await r.json();
+    if(!j.ok){toast('Ответ сервера: '+(j.err||'HTTP '+r.status),'err');return 0}
+    const ch=mergeBrigadesServer(j.items||[]);
+    try{teleHit('brig:pull')}catch(e){}
+    toast(ch?'Бригады с сервера: изменений '+fmtStd(ch):'Бригады с сервера: новых нет','ok');
+    return ch;
+  }catch(e){toast('Сервер ЛВС недоступен: '+String(e.message||e).slice(0,100),'err');return 0}
+}
+function mergeBrigadesServer(items){
+  let ch=0;
+  (items||[]).forEach(it=>{
+    if(!it||!it.id)return;
+    const ex=brigadeList().find(b=>b.id===it.id);
+    if(!ex){brigadeList().push(it);ch++}
+    else if((it.ts||0)>(ex.ts||0)){Object.assign(ex,it);ch++}
+  });
+  if(ch){save(true);try{renderBrigades()}catch(e){}}
+  return ch;
+}
+"""
+
+def V349(c):
+    c.ver('3.49')
+    m9 = '/* ------------------------------- 9. СВОДНАЯ ОТРИСОВКА И ИНИЦИАЛИЗАЦИЯ ------------------------------- */'
+    i = c.s.find(m9); assert i >= 0
+    c.s = c.s[:i] + MODULE_349 + '\n' + c.s[i:]
+    c.rep("        <button class=\"btn ghost small wide\" id=\"btnBrigIcs\" style=\"margin-top:6px\" hidden>⤓ ICS ротации бригад (год)</button>",
+          "        <button class=\"btn ghost small wide\" id=\"btnBrigIcs\" style=\"margin-top:6px\" hidden>⤓ ICS ротации бригад (год)</button>\n"
+          "        <button class=\"btn ghost small wide\" id=\"btnBrigPush\" style=\"margin-top:6px\" title=\"Общий справочник бригад сервера ЛВС (3.49)\">⇪ Бригады на сервер</button>\n"
+          "        <button class=\"btn ghost small wide\" id=\"btnBrigPull\" style=\"margin-top:6px\" title=\"Слить бригады с сервера (last-write-wins по ts)\">⇩ Бригады с сервера</button>", 'brig sync buttons')
+    c.rep("  bindClick('btnBrigApplyAll',()=>applyAllBrigades(cur.y,cur.m));                   /* 3.36: все бригады на месяц */",
+          "  bindClick('btnBrigApplyAll',()=>applyAllBrigades(cur.y,cur.m));                   /* 3.36: все бригады на месяц */\n"
+          "  bindClick('btnBrigPush',brigadesPush);                                            /* 3.49 */\n"
+          "  bindClick('btnBrigPull',brigadesPull);                                            /* 3.49 */", 'brig sync binds')
+    c.rep("const rec={name:g.name,patId:pat.id,anchor:base,offset:g.offset,members:g.members};",
+          "const rec={name:g.name,patId:pat.id,anchor:base,offset:g.offset,members:g.members,ts:Date.now()};   /* 3.49: ts для merge на сервере */", 'brig ts')
+    c.rep("    if(m.type==='xchg'){   /* 3.35: события журнала обмена — живое обновление и тосты */",
+          "    if(m.type==='brigades'){   /* 3.49: серверный справочник бригад обновился — подтягиваем merge'ом */\n"
+          "      try{brigadesPull()}catch(e){}\n"
+          "      return;\n"
+          "    }\n"
+          "    if(m.type==='xchg'){   /* 3.35: события журнала обмена — живое обновление и тосты */", 'ws brigades')
+    c.rep("""    {ic:'🧪',title:'Саудит состава поезда',hint:'диагностика · 3.48',run:()=>openSelfAudit()},""",
+          """    {ic:'🧪',title:'Саудит состава поезда',hint:'диагностика · 3.48',run:()=>openSelfAudit()},
+    {ic:'⇪',title:'Бригады на сервер ЛВС',hint:'синхронизация · 3.49',run:()=>{showTab('plan');setTimeout(()=>brigadesPush(),250)}},
+    {ic:'⇩',title:'Бригады с сервера ЛВС',hint:'синхронизация · 3.49',run:()=>{showTab('plan');setTimeout(()=>brigadesPull(),250)}},""", 'palette 349')
+    c.rep("""      <div class="lbl" style="margin-top:12px">Новое в версии 3.48 — консолидация поезда</div>""",
+          """      <div class="lbl" style="margin-top:12px">Новое в версии 3.49 — серверный контур бригад</div>
+      <ul class="hint" style="margin:6px 0 18px;line-height:1.6">
+        <li><b>Сервер ЛВС</b> (<code>server/sync-server.mjs</code>, патч <code>patch-server-349.py</code>): <code>GET/PUT /api/v1/brigades</code> — общий справочник бригад ротаций (файл <code>PT_BRIG_FILE</code>, по умолчанию plan-tabel-brigades.json рядом с каноном); права staff/admin на запись, аудит «brigades», WS-трансляция <code>{type:'brigades'}</code>; merge по id с last-write-wins по ts; лимит 200 бригад, валидация полей.</li>
+        <li><b>Клиент</b>: кнопки «⇪ Бригады на сервер» / «⇩ Бригады с сервера» в карточке «Бригады», палитра «⇪/⇩»; при событии WS справочник подтягивается автоматически и сливается по ts; у бригад появился <code>ts</code> для корректного слияния.</li>
+        <li><b>Тест</b>: <code>tests/integ-349.mjs</code> — живой сервер: PUT/GET, merge по ts, 400 на битых полях, WS-событие, персистентность между перезапусками.</li>
+      </ul>
+      <div class="lbl" style="margin-top:12px">Новое в версии 3.48 — консолидация поезда</div>""", 'help 349')
+    c.rep("""    get FEATURE_MAP(){return FEATURE_MAP},openFeatureMap,trainSelfAudit,openSelfAudit,""",
+          """    get FEATURE_MAP(){return FEATURE_MAP},openFeatureMap,trainSelfAudit,openSelfAudit,
+    /* ===== 3.49: серверный контур бригад ===== */
+    brigItems,brigadesPush,brigadesPull,mergeBrigadesServer,""", 'exports 349')
+
+# ============================== 3.50 OLAP БЮДЖЕТА ==============================
+MODULE_350 = r"""/* ================= 3.50: OLAP БЮДЖЕТА =================
+   Срез «подразделение × месяц» по мерам бюджета ФОТ: план/факт/лимит/отклонение/
+   процент исполнения; годовая колонка-итог; drill-click по ячейке ведёт к лимитам
+   месяца; CSV со штампом. */
+const BOLAP_MEAS=[['plan','План, тыс ₽'],['fact','Факт, тыс ₽'],['limit','Лимит, тыс ₽'],['dev','План − лимит, тыс ₽'],['pct','Факт, % лимита']];
+function budgetOlap(y){
+  const rows=state.departments.map(dp=>{
+    const cells=[];let pT=0,fT=0;
+    for(let m=1;m<=12;m++){const st=budgetStatus(y,m,dp.id);cells.push(st);pT+=st.plan;fT+=st.fact}
+    return{dp,cells,pT,fT};
+  });
+  return{y,rows};
+}
+function bolapVal(st,key){
+  if(key==='plan')return Math.round(st.plan/1000);
+  if(key==='fact')return Math.round(st.fact/1000);
+  if(key==='limit')return st.limit==null?null:Math.round(st.limit/1000);
+  if(key==='dev')return st.limit==null?null:Math.round((st.plan-st.limit)/1000);
+  if(key==='pct')return st.pctFact;
+  return null;
+}
+function renderBudgetOlap(){
+  const box=$('bolapBox');if(!box)return;
+  const y=+$('bolapYear')?+$('bolapYear').value:cur.y;
+  const meas=$('bolapMeas')?$('bolapMeas').value:'plan';
+  const ol=budgetOlap(y);
+  const head='<thead><tr><th>Подразделение</th>'+MUP.map(mm=>`<th class="n">${mm.slice(0,3)}</th>`).join('')+'<th class="n">Год</th></tr></thead>';
+  const body=ol.rows.map(r=>{
+    const cells=r.cells.map((st,mi)=>{
+      const v=bolapVal(st,meas);
+      const bad=(meas==='pct'&&st.overFact)||(meas==='dev'&&v!=null&&v>0);
+      const warn=meas==='pct'&&!st.overFact&&st.pctFact!=null&&st.pctFact>=90;
+      const style=bad?' style="color:var(--red);font-weight:700"':warn?' style="color:var(--amber-d);font-weight:600"':'';
+      const ttl=MUP[mi]+' '+y+': план '+fmtStd(st.plan,{unit:'₽'})+' · факт '+fmtStd(st.fact,{unit:'₽'})+(st.limit!=null?' · лимит '+fmtStd(st.limit,{unit:'₽'}):'');
+      return '<td class="n" data-bolap="'+mi+'"'+style+' title="'+ttl+'">'+(v==null?'—':fmtStd(v))+'</td>';
+    }).join('');
+    let totSum=0;
+    if(meas==='plan')totSum=r.pT;else if(meas==='fact')totSum=r.fT;
+    else if(meas==='limit'||meas==='dev')totSum=r.cells.reduce((a,st2)=>a+(st2.limit==null?0:(meas==='limit'?st2.limit:st2.plan-st2.limit)),0);
+    const tot=meas==='pct'?null:Math.round(totSum/1000);
+    return `<tr><td><b>${esc(r.dp.name)}</b></td>${cells}<td class="n"><b>${tot==null?'—':fmtStd(tot)}</b></td></tr>`;
+  }).join('');
+  box.innerHTML=`<div class="scroll-x"><table class="rtbl" role="table" aria-label="OLAP бюджета ${y}: подразделения по месяцам, мера — ${esc((BOLAP_MEAS.find(x=>x[0]===meas)||[])[1]||'')}">${head}<tbody>${body}</tbody></table></div>
+    <div class="hint" style="margin-top:6px">Значения — тыс ₽ (для «Факт, % лимита» — %); красный — перерасход факта или план выше лимита, янтарный — 90–100 % лимита; в title ячейки — полные суммы в ₽; клик по ячейке открывает лимиты месяца.</div>`;
+  box.querySelectorAll('[data-bolap]').forEach(td=>td.onclick=()=>{
+    const mi=+td.dataset.bolap;
+    cur={y,m:mi+1};
+    showTab('data');
+    setTimeout(()=>{const h=$('budgetCardH');if(h&&h.scrollIntoView)h.scrollIntoView({behavior:'smooth',block:'center'});renderBudgets()},250);
+  });
+}
+function budgetOlapCsvDl(){
+  const y=+$('bolapYear')?+$('bolapYear').value:cur.y;
+  const ol=budgetOlap(y);
+  const rows=[['OLAP бюджета ФОТ',String(y),'штамп',stampPlain('an')],[],
+    ['Подразделение','Месяц','План ₽','Факт ₽','Лимит ₽','План − лимит ₽','Факт % лимита','Статус']];
+  ol.rows.forEach(r=>r.cells.forEach((st,mi)=>rows.push([r.dp.name,MUP[mi],st.plan,st.fact,st.limit==null?'':st.limit,
+    st.limit==null?'':st.plan-st.limit,st.pctFact==null?'':st.pctFact,
+    st.limit==null?'лимит не задан':st.overFact?'перерасход факта':st.overPlan?'план выше лимита':'в лимите'])));
+  downloadCsv('olap-budget-'+y+'.csv',rows);
+  audit('Выгрузка OLAP бюджета',`${y} · CSV`,'budgets');
+  try{teleHit('budget:olap:csv')}catch(e){}
+  toast('OLAP бюджета выгружен в CSV','ok');
+}
+"""
+
+def V350(c):
+    c.ver('3.50')
+    m9 = '/* ------------------------------- 9. СВОДНАЯ ОТРИСОВКА И ИНИЦИАЛИЗАЦИЯ ------------------------------- */'
+    i = c.s.find(m9); assert i >= 0
+    c.s = c.s[:i] + MODULE_350 + '\n' + c.s[i:]
+    c.rep("""  <div class="card" style="margin-top:12px"><h3>OLAP-срез: произвольные измерения<span class="sub">""",
+          """  <div class="card" style="margin-top:12px"><h3>OLAP бюджета: подразделение × месяц<span class="sub">3.50 · план/факт/лимит/отклонение/% исполнения · drill-click к лимитам месяца</span></h3>
+    <div class="frow no-print" style="flex-wrap:wrap;gap:8px">
+      <div class="field" style="margin:0;max-width:120px"><label>Год</label><select class="inp" id="bolapYear" aria-label="Год OLAP бюджета"></select></div>
+      <div class="field" style="margin:0;max-width:220px"><label>Мера</label><select class="inp" id="bolapMeas" aria-label="Мера OLAP бюджета">${''}</select></div>
+      <div class="field" style="margin:0;align-self:end"><button class="btn ghost small" id="btnBolapCsv">⇩ CSV OLAP бюджета</button></div>
+    </div>
+    <div id="bolapBox" style="margin-top:8px"></div>
+  </div>
+  <div class="card" style="margin-top:12px"><h3>OLAP-срез: произвольные измерения<span class="sub">""", 'bolap card')
+    c.rep("  bindClick('btnFcCsv',forecastAbsCsvDl);     /* 3.43 */",
+          "  bindClick('btnFcCsv',forecastAbsCsvDl);     /* 3.43 */\n"
+          "  try{\n"
+          "    const by=$('bolapYear');if(by){by.innerHTML=Array.from({length:YMAX-YMIN+1},(_,i)=>`<option ${YMIN+i===cur.y?'selected':''}>${YMIN+i}</option>`).join('');by.onchange=()=>renderBudgetOlap()}\n"
+          "    const bm=$('bolapMeas');if(bm){bm.innerHTML=BOLAP_MEAS.map(x=>`<option value=\"${x[0]}\">${esc(x[1])}</option>`).join('');bm.onchange=()=>renderBudgetOlap()}\n"
+          "  }catch(e){}\n"
+          "  bindClick('btnBolapCsv',budgetOlapCsvDl);   /* 3.50 */", 'bolap binds')
+    c.rep('function renderPatterns(){renderBulk();try{renderBrigades()}catch(e){};try{renderMobiNav()}catch(e){};try{renderBudgets()}catch(e){};try{renderCertForecast()}catch(e){};try{renderForecastCard()}catch(e){};try{a11yPatch()}catch(e){}}   /* 3.36–3.45 хуки */',
+          'function renderPatterns(){renderBulk();try{renderBrigades()}catch(e){};try{renderMobiNav()}catch(e){};try{renderBudgets()}catch(e){};try{renderCertForecast()}catch(e){};try{renderForecastCard()}catch(e){};try{a11yPatch()}catch(e){};try{renderBudgetOlap()}catch(e){}}   /* 3.36–3.50 хуки */', 'render hook 350')
+    c.rep("""  {id:'brigYear',tab:'plan',name:'Годовой баланс бригад',form:'таблица бригад за год: дежурства мин–макс, конфликты с пожеланиями, SD; ребалансировка',source:'канон: state.brigades, пожелания, производственный календарь'}
+];""",
+          """  {id:'brigYear',tab:'plan',name:'Годовой баланс бригад',form:'таблица бригад за год: дежурства мин–макс, конфликты с пожеланиями, SD; ребалансировка',source:'канон: state.brigades, пожелания, производственный календарь'},
+  {id:'bolap',tab:'an',name:'OLAP бюджета: подразделение × месяц',form:'таблица-срез с мерами план/факт/лимит/отклонение/%, итог за год, drill-click к лимитам',source:'канон: план/факт, ставки, state.budgets'}
+];""", 'widget 350')
+    c.rep("""  {id:'brigYear',name:'Годовой баланс бригад',tab:'plan',crit:{filter:1,drill:1,live:1,insight:1,export:1},note:'3.37: фильтр-год, детализация до бригады и сотрудника, живой пересчёт, вывод по конфликтам/SD, CSV, действие-ребаланс'}];""",
+          """  {id:'brigYear',name:'Годовой баланс бригад',tab:'plan',crit:{filter:1,drill:1,live:1,insight:1,export:1},note:'3.37: фильтр-год, детализация до бригады и сотрудника, живой пересчёт, вывод по конфликтам/SD, CSV, действие-ребаланс'},
+  {id:'bolap',name:'OLAP бюджета',tab:'an',crit:{filter:1,drill:1,live:1,insight:1,export:1},note:'3.50: фильтры год/мера, drill-click ячейки к лимитам месяца, живой пересчёт, подсветка перерасхода, CSV со штампом'}];""", 'interactive 350')
+    c.rep("""    {ic:'⇩',title:'Бригады с сервера ЛВС',hint:'синхронизация · 3.49',run:()=>{showTab('plan');setTimeout(()=>brigadesPull(),250)}},""",
+          """    {ic:'⇩',title:'Бригады с сервера ЛВС',hint:'синхронизация · 3.49',run:()=>{showTab('plan');setTimeout(()=>brigadesPull(),250)}},
+    {ic:'💠',title:'OLAP бюджета: подразделение × месяц',hint:'аналитика · 3.50',run:()=>{showTab('an');setTimeout(()=>{const c=$('bolapBox');if(c&&c.scrollIntoView)c.scrollIntoView({behavior:'smooth',block:'center'});renderBudgetOlap()},300)}},""", 'palette 350')
+    c.rep("""      <div class="lbl" style="margin-top:12px">Новое в версии 3.49 — серверный контур бригад</div>""",
+          """      <div class="lbl" style="margin-top:12px">Новое в версии 3.50 — OLAP бюджета</div>
+      <ul class="hint" style="margin:6px 0 18px;line-height:1.6">
+        <li><b>Срез «подразделение × месяц»</b> в «Аналитике»: меры — план, факт, лимит, «план − лимит», «факт % лимита» (тыс ₽ / %), годовая колонка-итог; красный — перерасход факта или план выше лимита, янтарный — 90–100 % лимита.</li>
+        <li><b>Drill-click</b>: клик по ячейке открывает карточку лимитов ФОТ соответствующего месяца; в title ячейки — полные суммы в ₽.</li>
+        <li>Фильтры «год» и «мера», живой пересчёт, CSV со штампом (все меры построчно); виджет и отчёт внесены в реестры НСИ (5/5 «интерактивный»); телеметрия <code>budget:olap:csv</code>.</li>
+      </ul>
+      <div class="lbl" style="margin-top:12px">Новое в версии 3.49 — серверный контур бригад</div>""", 'help 350')
+    c.rep("""    brigItems,brigadesPush,brigadesPull,mergeBrigadesServer,""",
+          """    brigItems,brigadesPush,brigadesPull,mergeBrigadesServer,
+    /* ===== 3.50: OLAP бюджета ===== */
+    get BOLAP_MEAS(){return BOLAP_MEAS},budgetOlap,bolapVal,renderBudgetOlap,budgetOlapCsvDl,""", 'exports 350')
+
+# ============================== 3.51 ОФЛАЙН-КЭШ ОПЕРАЦИЙ ==============================
+MODULE_351 = r"""/* ================= 3.51: МОБИЛЬНЫЙ ОФЛАЙН-КЭШ ОПЕРАЦИЙ =================
+   Точечные операции операционного протокола (3.18), созданные без сети,
+   зеркалятся в localStorage ('pt.ops.cache'); при реконнекте (WS onopen)
+   или вручную очередь воспроизводится через opsQueue и уходит батчем. */
+function opsCacheKey(){return 'pt.ops.cache'}
+function opsCacheLoad(){try{return JSON.parse(localStorage.getItem(opsCacheKey())||'[]')||[]}catch(e){return[]}}
+function opsCacheSave(list){try{localStorage.setItem(opsCacheKey(),JSON.stringify((list||[]).slice(-500)))}catch(e){}opsCacheBadge()}
+function opsCacheAdd(op){
+  if(!op||!op.k)return;
+  const l=opsCacheLoad();
+  l.push(Object.assign({cts:Date.now()},op));
+  opsCacheSave(l);
+}
+function opsCacheClear(){try{localStorage.removeItem(opsCacheKey())}catch(e){}opsCacheBadge()}
+function opsCacheBadge(){
+  const n=opsCacheLoad().length;
+  const el=$('opsCachePill');
+  if(el){el.style.display=n?'':'none';el.textContent='📴 очередь: '+fmtStd(n,{unit:'оп'})}
+  return n;
+}
+function opsCacheReplay(){
+  const l=opsCacheLoad();
+  if(!l.length){toast('Офлайн-очередь пуста','ok');return 0}
+  opsCacheClear();
+  let n=0;
+  l.forEach(op=>{try{opsQueue(op);n++}catch(e){}});
+  try{teleHit('ops:replay')}catch(e){}
+  audit('Воспроизведение офлайн-очереди',fmtStd(n,{unit:'оп'})+' поставлено в операционный протокол','ops');
+  toast('Офлайн-очередь воспроизведена: '+fmtStd(n,{unit:'оп'})+(wsOn()?' — уходит на сервер':' — уйдёт после реконнекта'),'ok');
+  return n;
+}
+"""
+
+def V351(c):
+    c.ver('3.51')
+    m9 = '/* ------------------------------- 9. СВОДНАЯ ОТРИСОВКА И ИНИЦИАЛИЗАЦИЯ ------------------------------- */'
+    i = c.s.find(m9); assert i >= 0
+    c.s = c.s[:i] + MODULE_351 + '\n' + c.s[i:]
+    c.rep("""function opsQueue(op){
+  if(!opsActive())return;
+  opsEnqueue(OPS.q,op);""",
+          """function opsQueue(op){
+  if(!opsActive()){try{opsCacheAdd(op)}catch(e){}opsCacheBadge();return}   /* 3.51: офлайн-кэш операций */
+  opsEnqueue(OPS.q,op);""", 'opsQueue cache')
+    c.rep("""  if(!wsOn())return;   /* очередь сохранена — уйдёт после реконнекта */""",
+          """  if(!wsOn()){try{opsCacheSave(OPS.q)}catch(e){}   /* 3.51: зеркало очереди в localStorage */
+    opsCacheBadge();return}   /* очередь сохранена — уйдёт после реконнекта */""", 'opsFlush cache mirror')
+    c.rep("""  catch(e){delete OPS.pend[cid];OPS.q=ops.concat(OPS.q)}
+  opsFallbackSchedule();""",
+          """  catch(e){delete OPS.pend[cid];OPS.q=ops.concat(OPS.q)}
+  try{if(!OPS.q.length&&wsOn())opsCacheClear()}catch(e){}   /* 3.51: доставка подтверждена — кэш чист */
+  opsFallbackSchedule();""", 'opsFlush cache clear')
+    c.rep("  PT_WS.onopen=()=>{",
+          "  PT_WS.onopen=()=>{\n    try{if(opsCacheLoad().length)setTimeout(()=>opsCacheReplay(),400);opsCacheBadge()}catch(e){}   /* 3.51: реконнект воспроизводит офлайн-очередь */", 'ws onopen replay')
+    c.rep("""<span id="saveDot" title="Автосохранение в браузере"></span>""",
+          """<span id="saveDot" title="Автосохранение в браузере"></span><span class="pill a" id="opsCachePill" style="margin-left:6px;display:none" title="3.51: операции, накопленные офлайн, — уйдут на сервер после реконнекта"></span>""", 'ops pill')
+    c.rep("""    {ic:'💠',title:'OLAP бюджета: подразделение × месяц',hint:'аналитика · 3.50',run:()=>{showTab('an');setTimeout(()=>{const c=$('bolapBox');if(c&&c.scrollIntoView)c.scrollIntoView({behavior:'smooth',block:'center'});renderBudgetOlap()},300)}},""",
+          """    {ic:'💠',title:'OLAP бюджета: подразделение × месяц',hint:'аналитика · 3.50',run:()=>{showTab('an');setTimeout(()=>{const c=$('bolapBox');if(c&&c.scrollIntoView)c.scrollIntoView({behavior:'smooth',block:'center'});renderBudgetOlap()},300)}},
+    {ic:'📴',title:'Офлайн-очередь операций: воспроизвести',hint:'синхронизация · 3.51',run:()=>opsCacheReplay()},""", 'palette 351')
+    c.rep("""      <div class="lbl" style="margin-top:12px">Новое в версии 3.50 — OLAP бюджета</div>""",
+          """      <div class="lbl" style="margin-top:12px">Новое в версии 3.51 — мобильный офлайн-кэш операций</div>
+      <ul class="hint" style="margin:6px 0 18px;line-height:1.6">
+        <li><b>Кэш точечных операций</b>: правки плана/факта/заявок, сделанные без сети (WS выключен), зеркалятся в localStorage (<code>pt.ops.cache</code>, до 500 операций); при реконнекте (WS onopen) очередь автоматически воспроизводится через операционный протокол и уходит батчем.</li>
+        <li><b>Индикатор</b>: пилл «📴 очередь: N оп» рядом с индикатором автосохранения в шапке; кнопка палитры «📴 Офлайн-очередь операций: воспроизвести» для ручного воспроизведения; аудит и телеметрия <code>ops:replay</code>.</li>
+        <li><b>Безопасность доставки</b>: кэш очищается только после успешной отправки очереди на сервер; при сбое отправки очередь зеркалируется повторно — операции не теряются и не дублируются (дедупликация opsEnqueue по ячейке/заявке).</li>
+      </ul>
+      <div class="lbl" style="margin-top:12px">Новое в версии 3.50 — OLAP бюджета</div>""", 'help 351')
+    c.rep("""    get BOLAP_MEAS(){return BOLAP_MEAS},budgetOlap,bolapVal,renderBudgetOlap,budgetOlapCsvDl,""",
+          """    get BOLAP_MEAS(){return BOLAP_MEAS},budgetOlap,bolapVal,renderBudgetOlap,budgetOlapCsvDl,
+    /* ===== 3.51: офлайн-кэш операций ===== */
+    opsCacheKey,opsCacheLoad,opsCacheSave,opsCacheAdd,opsCacheClear,opsCacheBadge,opsCacheReplay,""", 'exports 351')
+
+
+SPECS = [('3.38', V338), ('3.39', V339), ('3.40', V340), ('3.41', V341), ('3.42', V342), ('3.43', V343), ('3.44', V344), ('3.45', V345), ('3.46', V346), ('3.47', V347), ('3.48', V348), ('3.49', V349), ('3.50', V350), ('3.51', V351)]
 
 def main():
     args = sys.argv[1:] or ['3.38', '3.41']

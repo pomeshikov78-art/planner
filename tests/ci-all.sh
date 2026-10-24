@@ -10,7 +10,12 @@ echo "--- финалы поезда: 3.46–3.48 ---"
 node tests/smoke-346.mjs План-табель-WFM-3.46.html
 node tests/smoke-347.mjs План-табель-WFM-3.47.html
 node tests/smoke-348.mjs План-табель-WFM-3.48.html
-echo "--- офлайн-сборка финала ---"
+echo "--- ветка 3.49+: серверный контур, OLAP бюджета, офлайн-кэш ---"
+node tests/integ-349.mjs
+node tests/smoke-350.mjs План-табель-WFM-3.50.html
+node tests/smoke-351.mjs План-табель-WFM-3.51.html
+echo "--- офлайн-сборки финалов ---"
 node tests/smoke-348.mjs План-табель-WFM-3.48-offline.html
 node tests/smoke-346.mjs План-табель-WFM-3.48-offline.html
-echo "CI-ALL: PASS (3.36–3.48, онлайн + офлайн финала)"
+node tests/smoke-351.mjs План-табель-WFM-3.51-offline.html
+echo "CI-ALL: PASS (3.36–3.51: регрессы, поезд, серверный интег, офлайн финалов)"
