@@ -790,6 +790,38 @@ async function apiHttp(req,res,u,p){
     if(!r.ok)return sendJ(400,r);
     return sendJ(200,r);
   }
+  /* ===== 3.56: серверный скан покрытия по канону ===== */
+  if(p==='/api/v1/coverage'&&req.method==='GET'){
+    const st=canonDecode(CANON);
+    if(!st)return sendJ(409,{err:'на сервере нет канона — сначала полная публикация'});
+    const y=+(u.searchParams.get('y')||0),m=+(u.searchParams.get('m')||0);
+    if(!y||!m||m<1||m>12)return sendJ(400,{err:'ожидается ?y=YYYY&m=M'});
+    const deptId=String(u.searchParams.get('dept')||'');
+    const mode=u.searchParams.get('mode')==='work'?'work':'duty';
+    const dp=(st.departments||[]).find(x=>x.id===deptId)||null;
+    let need=+(u.searchParams.get('need')||0);
+    if(!need&&dp)need=dp.minDuty||0;
+    const es=(st.employees||[]).filter(e=>!e.fired&&(!deptId||e.deptId===deptId));
+    const mk3=`${y}-${String(m).padStart(2,'0')}`,DIM=new Date(y,m,0).getDate();
+    const pm=st.plan&&st.plan[mk3]||{};
+    const reasons=st.reasons||[];
+    const days=[];let defDays=0,worst=0;
+    for(let d=1;d<=DIM;d++){
+      let plan=0;
+      es.forEach(e=>{
+        const raw=pm[e.id]&&pm[e.id][d];if(!raw)return;
+        const code=String(raw).split('/')[0];
+        const r=reasons.find(x=>x.code===code);
+        if(!r)return;
+        const hit=mode==='duty'?r.cat==='duty':(r.coeff>0&&r.cat!=='off');
+        if(hit)plan++;
+      });
+      const deficit=Math.max(0,need-plan);
+      if(deficit>0){defDays++;worst=Math.max(worst,deficit)}
+      days.push({d,plan,need,deficit});
+    }
+    return sendJ(200,{ok:1,y,m,dept:deptId,need,mode,days,defDays,worst,counter:CANON?CANON.counter:0,ts:now()});
+  }
   /* ===== 3.49: серверный контур бригад ротаций ===== */
   if(p==='/api/v1/brigades'&&req.method==='GET'){
     return sendJ(200,{ok:1,items:BRIG.items,ts:BRIG.ts||0,by:BRIG.by||'',total:BRIG.items.length});
@@ -1552,9 +1584,32 @@ setInterval(()=>{
     for(const dd of Object.keys(st.plan[mk2][eid])){cells++;
       if(st.reasons){const code=String(st.plan[mk2][eid][dd]).split('|')[0];
         const r=st.reasons.find(x=>x.code===code);if(r&&r.cat==='duty')duties++}}
+  /* 3.57: дефициты покрытия на ближайшие 7 дней по канону сервера */
+  let covTxt=' Покрытие: дефицитов нет.';
+  if(st&&st.departments&&st.reasons&&st.plan){
+    const defs=[];
+    st.departments.filter(dp=>(dp.minDuty||0)>0).forEach(dp=>{
+      const es=(st.employees||[]).filter(e=>!e.fired&&e.deptId===dp.id);
+      let bad=0;
+      for(let i2=0;i2<7;i2++){
+        const dd2=new Date(d.getTime()+i2*864e5);
+        const mk3=`${dd2.getFullYear()}-${String(dd2.getMonth()+1).padStart(2,'0')}`;
+        let plan=0;
+        es.forEach(e=>{
+          const row=st.plan[mk3]&&st.plan[mk3][e.id];
+          const code=row?String(row[dd2.getDate()]||'').split('/')[0]:'';
+          const r=st.reasons.find(x=>x.code===code);
+          if(r&&r.cat==='duty')plan++;
+        });
+        if(plan<dp.minDuty)bad++;
+      }
+      if(bad)defs.push(dp.name+': '+bad+' дн.');
+    });
+    if(defs.length)covTxt=' Дефициты покрытия 7 дней: '+defs.join('; ')+'.';
+  }
   const vacRev=st&&Array.isArray(st.vac)?st.vac.filter(r=>r.status==='review').length:0;
   const unacked=SIGS.sigs.filter(s=>s.ts>now()-7*864e5&&Object.keys(s.acks||{}).length===0).length;
-  const text=`📋 Дайджест ${d.toLocaleDateString('ru-RU')} ${hhmm}: план ${mo}/${y} — ${cells} отметок, дежурств ${duties}; на согласовании отпусков ${vacRev}; неквитированных сигналов ${unacked}; клиентов ${WSS.clients.size}.`;
+  const text=`📋 Дайджест ${d.toLocaleDateString('ru-RU')} ${hhmm}: план ${mo}/${y} — ${cells} отметок, дежурств ${duties}; на согласовании отпусков ${vacRev}; неквитированных сигналов ${unacked}; клиентов ${WSS.clients.size}.${covTxt}`;
   const msg={id:'m'+now().toString(36),login:'Сервер',text,channel:'general',ts:now()};
   CHAT.msgs.push(msg);persistChat();broadcast({type:'chat',msg});
   if(E('PT_DIGEST_OUT'))appendFile(path.resolve(E('PT_DIGEST_OUT')),text+'\n').catch(()=>{});
@@ -1578,6 +1633,7 @@ server.listen(PORT,HOST,()=>{
   console.log(`   обмен 3.35: /api/v1/xchg/map (сопоставление кодов Т-13), /api/v1/xchg/log (журнал выгрузок/импортов), /api/v1/xchg/retry (повтор)`);
   console.log(`   бригады 3.49: GET/PUT /api/v1/brigades (общий справочник бригад, файл ${path.basename(BRIG_FILE)})`);
   console.log(`   бюджеты 3.53: GET/PUT /api/v1/budgets (лимита ФОТ, файл ${path.basename(BUDG_FILE)})`);
+  console.log(`   покрытие 3.56: GET /api/v1/coverage?y=&m=&dept=&need=&mode= (скан по канону сервера)`);
   console.log(`   журнал обмена: ${XCHG_FILE} (до ${XCHG_MAX} записей)${XCHG.items.length?' · сейчас '+XCHG.items.length:''}`);
   if(SSO_HEADER)console.log(`   SSO: доверенный заголовок «${SSO_HEADER}» → роль ${SSO_ROLE}${SSO_PROVISION?' (авторегистрация вкл)':' (только существующие учётки)'}`);
   if(REPLICA_OF)console.log(`   режим: РЕПЛИКА от ${REPLICA_OF}`);

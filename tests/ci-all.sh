@@ -19,10 +19,18 @@ node tests/smoke-352.mjs План-табель-WFM-3.52.html
 node tests/integ-353.mjs
 node tests/smoke-354.mjs План-табель-WFM-3.54.html
 node tests/integ-355.mjs
+echo "--- ветка 3.56+: серверный скан, табло, ICS ---"
+node tests/smoke-356.mjs План-табель-WFM-3.56.html
+node tests/integ-356.mjs
+node tests/smoke-357.mjs План-табель-WFM-3.57.html
+node tests/integ-357.mjs
+node tests/smoke-358.mjs План-табель-WFM-3.58.html
 echo "--- офлайн-сборки финалов ---"
 node tests/smoke-348.mjs План-табель-WFM-3.48-offline.html
 node tests/smoke-346.mjs План-табель-WFM-3.48-offline.html
 node tests/smoke-351.mjs План-табель-WFM-3.51-offline.html
 node tests/smoke-352.mjs План-табель-WFM-3.55-offline.html
 node tests/smoke-354.mjs План-табель-WFM-3.55-offline.html
-echo "CI-ALL: PASS (3.36–3.55: регрессы, поезд, серверные интеги, офлайн финалов)"
+node tests/smoke-357.mjs План-табель-WFM-3.58-offline.html
+node tests/smoke-358.mjs План-табель-WFM-3.58-offline.html
+echo "CI-ALL: PASS (3.36–3.58: регрессы, поезд, серверные интеги, офлайн финалов)"
