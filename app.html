@@ -6,7 +6,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>План-табель служебной деятельности · WFM 3.59</title>
+<title>План-табель служебной деятельности · WFM 3.62</title>
 <meta name="description" content="Планирование служебной деятельности, табель учёта рабочего времени (Т-13), дежурства, производственный календарь 2010–2035, аналитика загруженности, импорт PDF/CSV, экспорт Excel.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -1418,6 +1418,8 @@ html[data-theme=dark] body.cvd{--viz1:#56B4E9;--viz2:#009E73;--viz3:#E69F00;--vi
       <h3>Конструктор приказов<span class="sub">3.44 · шаблоны с плейсхолдерами · источники: отпуска, дежурства, произвольный текст · .txt и .docx</span></h3>
       <div id="orderBox" class="hint"></div>
       <button class="btn small" id="btnOrderNew" style="margin-top:8px">📜 Открыть конструктор приказов</button>
+      <div class="lbl" style="margin-top:12px">Реестр подписанных приказов<span class="sub">3.62 · SHA-256 текста · сверка подписи · выгрузка текста</span></div>
+      <div id="ordersRegBox"></div>
       </div>
       <div class="card">
       <h3>Конструктор отчёта</h3>
@@ -3570,6 +3572,23 @@ function showHelp(){
       <ul class="hint" style="margin:6px 0 18px;line-height:1.6">
         <li><b>Сервер ЛВС</b>: <code>GET/PUT /api/v1/budgets</code> — общий справочник лимитов ФОТ (файл <code>PT_BUDGET_FILE</code>): формат <code>{items:{"YYYY-MM":{deptId:лимит|null}}}</code>, права staff/admin/budget, валидация формата месяцев и чисел, merge по месяцам last-write-wins по ts, аудит «budgets», WS-трансляция <code>{type:'budgets'}</code>, персистентность.</li>
         <li><b>Клиент</b>: кнопки «⇪/⇩ Бюджеты» в карточке «Бюджет и лимиты ФОТ» и команды палитры; локальные изменения получают ts (<code>state.budgetsTs</code>); при WS-событии лимиты подтягиваются автоматически; телеметрия budget:push/budget:pull.</li>
+      </ul>
+      <div class="lbl" style="margin-top:12px">Новое в версии 3.62 — подписи приказов и реестр</div>
+      <ul class="hint" style="margin:6px 0 18px;line-height:1.6">
+        <li><b>Подпись приказа</b>: «✍ Подписать в реестр» в конструкторе — SHA-256 текста приказа (фолбэк FNV без crypto.subtle) пишется в реестр канона (<code>state.orders</code>: номер, шаблон, дата, автор, текст, hash, статус); до 100 записей.</li>
+        <li><b>Реестр в «Отчётах»</b>: список подписанных приказов с обрезанным хешем, «✔ сверить» (пересчёт SHA-256 текста: корректна / не сходится — с аудитом обоих исходов) и «⤓ текст» (выгрузка подписанного текста); аудит «Приказ подписан в реестр», телеметрия <code>order:sign</code>.</li>
+      </ul>
+      <div class="lbl" style="margin-top:12px">Новое в версии 3.61 — бригадир в печатных формах и календаре</div>
+      <ul class="hint" style="margin:6px 0 18px;line-height:1.6">
+        <li><b>Бригадная ведомость</b> (печать): в шапке каждой бригады — «бригадир: ФИО» (роль 3.59).</li>
+        <li><b>ICS-экспорт ротаций</b>: события бригадира получают суффикс «(бригадир)» в SUMMARY — календарь видит роль без открытия приложения.</li>
+        <li><b>«Мой месяц → Моя бригада»</b>: пилл «вы — бригадир» для сотрудника с ролью lead.</li>
+      </ul>
+      <div class="lbl" style="margin-top:12px">Новое в версии 3.60 — снапшот-дифф канона</div>
+      <ul class="hint" style="margin:6px 0 18px;line-height:1.6">
+        <li><b>«🔍 Дифф с текущим»</b> в модалке снапшота: сравнение gzip-снимка (3.59) с текущим каноном рабочего места — добавленные/удалённые/изменённые ячейки плана по месяцам, изменения счётчиков справочников (штатка, причины, шаблоны, бригады, бюджеты, отпуска, обмены), counter канона «было → стало».</li>
+        <li><b>«🌐 Дифф с сервером»</b>: то же против канона сервера ЛВС (<code>GET /api/v1/canon</code>, с токеном) — видно, ушёл ли сервер вперёд за время офлайна, прежде чем решать «публиковать force или сначала слить».</li>
+        <li>Таблица месяцев и пиллы справочников рендерятся прямо в модалке; аудит «Снапшот-дифф (локально)», телеметрия <code>pub:snapdiff</code> / <code>pub:snapdiff:srv</code>; офлайн-ответы деградируют до понятной подсказки.</li>
       </ul>
       <div class="lbl" style="margin-top:12px">Новое в версии 3.59 — роли бригад (бригадир) и офлайн-снапшот публикации</div>
       <ul class="hint" style="margin:6px 0 18px;line-height:1.6">
@@ -11031,7 +11050,7 @@ function printBrigadeSheet(){
   let rows='';
   bl.forEach(b=>{
     const pat=patById(b.patId);
-    rows+=`<tr><td colspan="${DIM+3}" style="background:#eef1f7;font-weight:700">${esc(b.name)}${pat?` · шаблон «${esc(pat.name)}» (${esc(pat.seq)}) · смещение фазы ${fmtStd(b.offset||0,{unit:'дн'})} · якорь ${esc(b.anchor||'—')}`:''}</td></tr>`;
+    rows+=`<tr><td colspan="${DIM+3}" style="background:#eef1f7;font-weight:700">${esc(b.name)}${pat?` · шаблон «${esc(pat.name)}» (${esc(pat.seq)}) · смещение фазы ${fmtStd(b.offset||0,{unit:'дн'})} · якорь ${esc(b.anchor||'—')}`:''}${brigLead(b)?` · бригадир: ${esc(empName(brigLead(b)))}`:''}</td></tr>`;   /* 3.61 */
     (b.members||[]).forEach(eid=>{
       const e=emp(eid);if(!e)return;
       let cnt=0,hh=0,td='';
@@ -11348,7 +11367,7 @@ function exportBrigadeIcs(brigIds,year,name,onlyEid){
           'DTSTAMP:'+stamp,
           'DTSTART;VALUE=DATE:'+dk.split('-').join(''),
           'DTEND;VALUE=DATE:'+nd.split('-').join(''),
-          `SUMMARY:${esc(c)} · ${e.name} (${b.name})`,
+          `SUMMARY:${esc(c)} · ${e.name}${brigRole(b,e.id)==='lead'?' (бригадир)':''} (${b.name})`,   /* 3.61: роль в календаре */
           'DESCRIPTION:'+(reason(c)?esc(reason(c).name):''),
           'END:VEVENT');
         n++;
@@ -11978,7 +11997,7 @@ function openOrderConstructor(tplId){
     <div class="field"><label>Произвольный текст (для источника «custom», плейсхолдер {{TEXT}})</label><textarea id="ocText" class="inp" style="min-height:60px" placeholder="Например: утвердить состав дежурной службы на период…"></textarea></div>
     <div class="lbl" style="margin-top:10px">Предпросмотр</div>
     <pre id="ocPrev" class="mono" style="white-space:pre-wrap;background:var(--soft);border:1px solid var(--line);border-radius:8px;padding:10px;font-size:11.5px;max-height:34vh;overflow:auto"></pre>`,
-    buttons:`<button class="btn ghost" data-coc>Закрыть</button><button class="btn ghost" id="ocSave">💾 Сохранить шаблон</button><button class="btn ghost" id="ocTxt">⤓ .txt</button><button class="btn" id="ocDocx">⤓ DOCX</button>`,
+    buttons:`<button class="btn ghost" data-coc>Закрыть</button><button class="btn ghost" id="ocSave">💾 Сохранить шаблон</button><button class="btn ghost" id="ocSign" title="SHA-256 текста приказа и запись в реестр (3.62)">✍ Подписать в реестр</button><button class="btn ghost" id="ocTxt">⤓ .txt</button><button class="btn" id="ocDocx">⤓ DOCX</button>`,
     onMount(b){
       const ctx=()=>{
         const tpl=orderTpls().find(x=>x.id===b.querySelector('#ocTpl').value)||orderTpls()[0];
@@ -11995,6 +12014,11 @@ function openOrderConstructor(tplId){
         const{tpl}=ctx();
         tpl.body=b.querySelector('#ocBody').value;
         save(true);audit('Шаблон приказа сохранён',tpl.name,'orders');toast('Шаблон сохранён','ok');
+      };
+      b.querySelector('#ocSign').onclick=async()=>{
+        const{tpl,ctx:cc}=ctx();
+        const text=orderRender({body:b.querySelector('#ocBody').value},cc);
+        await orderSign(text,cc.num,tpl.name);
       };
       b.querySelector('#ocTxt').onclick=()=>{
         const{tpl,ctx:cc}=ctx();
@@ -12826,7 +12850,12 @@ function openPubSnap(){
   if(!s){toast('Офлайн-снапшот канона не сохранён','ok');return}
   openModal({title:'📦 Офлайн-снапшот канона',body:`
     <div class="status" style="margin-top:0">Сохранён: <b>${new Date(s.ts).toLocaleString('ru-RU')}</b> · ${esc(s.by||'')} · размер канона ${fmtStd(Math.round((s.bytes||0)/1024),{unit:'КБ'})}${s.gz?' · gzip':''}.</div>
-    <div class="hint">Снапшот — страховка отложенной публикации (3.54): если устройство потеряется до реконнекта, снимок канона останется в localStorage и его можно выгрузить и импортировать на другом рабочем месте. После успешной доставки публикации снимок очищается автоматически.</div>`,
+    <div class="hint">Снапшот — страховка отложенной публикации (3.54): если устройство потеряется до реконнекта, снимок канона останется в localStorage и его можно выгрузить и импортировать на другом рабочем месте. После успешной доставки публикации снимок очищается автоматически.</div>
+    <div class="mini" style="margin-top:8px;display:flex;gap:6px">
+      <button class="btn ghost small" id="psDiffLocal" title="Сравнить снимок с текущим каноном этого рабочего места">🔍 Дифф с текущим</button>
+      <button class="btn ghost small" id="psDiffSrv" title="Сравнить снимок с каноном сервера ЛВС (GET /api/v1/canon)">🌐 Дифф с сервером</button>
+    </div>
+    <div id="psDiff"></div>`,
     buttons:'<button class="btn ghost" data-cps359>Закрыть</button><button class="btn ghost" id="psDl359">⤓ Выгрузить снимок</button><button class="btn warn" id="psDel359">✕ Очистить</button>',
     onMount(b){
       b.querySelector('[data-cps359]').onclick=closeModal;
@@ -12839,7 +12868,139 @@ function openPubSnap(){
         toast('Снимок выгружен','ok');
       };
       b.querySelector('#psDel359').onclick=()=>{pubSnapClear();closeModal();toast('Снапшот очищен')};
+      b.querySelector('#psDiffLocal').onclick=async()=>{
+        const d=await pubSnapDiffLocal();
+        b.querySelector('#psDiff').innerHTML=diffRenderHtml(d,'Снимок ↔ текущий канон');
+        try{teleHit('pub:snapdiff')}catch(e){}
+        try{audit('Снапшот-дифф (локально)',`ячеек: +${d?d.cellsAdd:0}/−${d?d.cellsDel:0}/±${d?d.cellsChg:0}`,'ops')}catch(e){}
+      };
+      b.querySelector('#psDiffSrv').onclick=async()=>{
+        const r=await pubSnapDiffServer();
+        b.querySelector('#psDiff').innerHTML=diffRenderHtml(r.diff||r,'Снимок ↔ канон сервера');
+        try{teleHit('pub:snapdiff:srv')}catch(e){}
+      };
     }});
+}
+
+/* ================= 3.60: СНАПШОТ-ДИФФ КАНОНА =================
+   Сравнение офлайн-снапшота (3.59) с текущим каноном и с каноном сервера
+   (GET /api/v1/canon): ячейки плана (add/del/chg по месяцам), счётчики
+   справочников, counter канона. Помогает решить «публиковать force или
+   сначала слить изменения» после долгого офлайна. */
+function diffStates(a,b){
+  const out={months:[],cellsAdd:0,cellsDel:0,cellsChg:0,dicts:[],counterA:a.counter||0,counterB:b.counter||0};
+  const mks=new Set([...Object.keys(a.plan||{}),...Object.keys(b.plan||{})]);
+  mks.forEach(mk=>{
+    const pa=(a.plan||{})[mk]||{},pb=(b.plan||{})[mk]||{};
+    let add=0,del=0,chg=0;
+    const eids=new Set([...Object.keys(pa),...Object.keys(pb)]);
+    eids.forEach(eid=>{
+      const ra=pa[eid]||{},rb=pb[eid]||{};
+      const ds=new Set([...Object.keys(ra),...Object.keys(rb)]);
+      ds.forEach(d=>{
+        const va=ra[d],vb=rb[d];
+        if(va==null&&vb!=null)add++;
+        else if(va!=null&&vb==null)del++;
+        else if(va!==vb)chg++;
+      });
+    });
+    if(add||del||chg)out.months.push({mk,add,del,chg});
+    out.cellsAdd+=add;out.cellsDel+=del;out.cellsChg+=chg;
+  });
+  [['employees','штатка'],['departments','подразделения'],['reasons','причины'],['patterns','шаблоны'],
+   ['brigades','бригады'],['budgets','бюджеты'],['vac','отпуска'],['swaps','обмены']].forEach(([k,label])=>{
+    const na=Array.isArray(a[k])?a[k].length:Object.keys(a[k]||{}).length;
+    const nb=Array.isArray(b[k])?b[k].length:Object.keys(b[k]||{}).length;
+    if(na!==nb)out.dicts.push({label,a:na,b:nb});
+  });
+  return out;
+}
+async function pubSnapState(){
+  const s=pubSnapLoad();if(!s)return null;
+  const json=s.data||(s.gz?await gzDecompress(s.gz):null);
+  if(!json)return null;
+  try{return JSON.parse(json)}catch(e){return null}
+}
+async function pubSnapDiffLocal(){
+  const old=await pubSnapState();
+  if(!old)return null;
+  return diffStates(old,state);
+}
+async function pubSnapDiffServer(){
+  if(!/^https?:$/.test(location.protocol))return{err:'офлайн: сравнение с сервером доступно по HTTP'};
+  const old=await pubSnapState();
+  if(!old)return{err:'нет снапшота'};
+  try{
+    const r=await fetch('api/v1/canon'+(wsToken()?'?token='+encodeURIComponent(wsToken()):''),{cache:'no-store'});
+    const j=await r.json();
+    let srv=null;
+    if(j&&j.gz)srv=JSON.parse(await gzDecompress(j.gz));
+    else if(j&&j.data)srv=JSON.parse(j.data);
+    else if(j&&j.state)srv=j.state;
+    else if(j&&j.canon&&j.canon.gz)srv=JSON.parse(await gzDecompress(j.canon.gz));
+    if(!srv)return{err:'на сервере нет канона'};
+    return{diff:diffStates(old,srv),serverCounter:srv.counter||0};
+  }catch(e){return{err:'сервер недоступен: '+String(e.message||e).slice(0,90)}}
+}
+function diffRenderHtml(d,title){
+  if(!d)return `<div class="status err" style="margin-top:8px">${esc(title)}: нет данных.</div>`;
+  if(d.err)return `<div class="status err" style="margin-top:8px">${esc(title)}: ${esc(d.err)}</div>`;
+  const tot=d.cellsAdd+d.cellsDel+d.cellsChg;
+  return `<div class="status ${tot?'':'ok'}" style="margin-top:8px"><b>${esc(title)}</b>: ячеек добавлено ${fmtStd(d.cellsAdd)}, удалено ${fmtStd(d.cellsDel)}, изменено ${fmtStd(d.cellsChg)}; counter ${fmtStd(d.counterA)} → ${fmtStd(d.counterB)}${d.serverCounter!=null?` (сервер: ${fmtStd(d.serverCounter)})`:''}.</div>
+  ${d.months.length?`<div class="scroll-x" style="max-height:26vh;overflow:auto;margin-top:6px"><table class="rtbl"><thead><tr><th>Месяц</th><th class="n">+</th><th class="n">−</th><th class="n">изм.</th></tr></thead><tbody>${d.months.slice(0,24).map(m=>`<tr><td>${esc(m.mk)}</td><td class="n">${fmtStd(m.add)}</td><td class="n">${fmtStd(m.del)}</td><td class="n">${fmtStd(m.chg)}</td></tr>`).join('')}</tbody></table></div>`:''}
+  ${d.dicts.length?`<div style="margin-top:6px">${d.dicts.map(x=>`<span class="pill a" style="margin:1px">${esc(x.label)}: ${fmtStd(x.a)} → ${fmtStd(x.b)}</span>`).join(' ')}</div>`:'<div class="hint" style="margin-top:6px">Справочники не менялись.</div>'}`;
+}
+
+/* ================= 3.62: ПОДПИСИ ПРИКАЗОВ И РЕЕСТР =================
+   Подпись приказа = SHA-256 текста (фолбэк FNV при отсутствии crypto.subtle);
+   реестр state.orders: номер, дата, автор, текст, hash, статус; сверка подписи
+   и выгрузка текста из реестра. */
+function ordersReg(){if(!Array.isArray(state.orders))state.orders=[];return state.orders}
+async function sha359(text){
+  try{
+    const buf=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(String(text)));
+    return Array.from(new Uint8Array(buf)).map(x=>x.toString(16).padStart(2,'0')).join('');
+  }catch(e){
+    let h=5381;const s=String(text);
+    for(let i=0;i<s.length;i++)h=((h*33)^s.charCodeAt(i))>>>0;
+    return 'fnv-'+h.toString(16);
+  }
+}
+async function orderSign(text,num,tplName){
+  const rec={id:uid('ord'),num:num||'',tpl:tplName||'',date:new Date().toLocaleDateString('ru-RU'),
+    ts:Date.now(),by:actor(),text:String(text),hash:await sha359(text),status:'signed'};
+  ordersReg().unshift(rec);
+  if(ordersReg().length>100)ordersReg().length=100;
+  save(true);
+  audit('Приказ подписан в реестр',`${rec.num||'б/н'} · ${rec.tpl} · SHA-256 ${rec.hash.slice(0,12)}…`,'orders');
+  try{teleHit('order:sign')}catch(e){}
+  toast('Приказ в реестре: подпись '+rec.hash.slice(0,8)+'…','ok');
+  try{renderOrdersRegistry()}catch(e){}
+  return rec;
+}
+async function orderVerify(rec){
+  if(!rec)return false;
+  return (await sha359(rec.text))===rec.hash;
+}
+function renderOrdersRegistry(){
+  const box=$('ordersRegBox');if(!box)return;
+  const L=ordersReg();
+  box.innerHTML=L.length?L.slice(0,15).map(r=>`<div class="log-row" style="align-items:center">
+    <span style="flex:1">${tsStr(r.ts)} · <b>${esc(r.num||'б/н')}</b>${r.tpl?` · ${esc(r.tpl)}`:''} · ${esc(r.by)} · <span class="mono hint">${esc(String(r.hash).slice(0,16))}…</span></span>
+    <button class="btn ghost tiny" data-ordv="${r.id}" title="Пересчитать SHA-256 текста и сравнить с подписью">✔ сверить</button>
+    <button class="btn ghost tiny" data-ordd="${r.id}" title="Выгрузить подписанный текст">⤓ текст</button>
+  </div>`).join(''):'<div class="hint">Реестр пуст: подпишите приказ из конструктора («✍ Подписать в реестр»).</div>';
+  box.querySelectorAll('[data-ordv]').forEach(b=>b.onclick=async()=>{
+    const r=ordersReg().find(x=>x.id===b.dataset.ordv);if(!r)return;
+    const okv=await orderVerify(r);
+    toast(okv?'Подпись корректна: текст не изменялся':'ПОДПИСЬ НЕ СХОДИТСЯ: текст изменён после подписания',okv?'ok':'err');
+    audit('Сверка подписи приказа',(okv?'корректна':'НЕСООТВЕТСТВИЕ')+' · '+(r.num||'б/н'),'orders');
+  });
+  box.querySelectorAll('[data-ordd]').forEach(b=>b.onclick=()=>{
+    const r=ordersReg().find(x=>x.id===b.dataset.ordd);if(!r)return;
+    download('prikaz-podpisan-' +(r.num||r.id)+'.txt',r.text,'text/plain');
+    toast('Текст приказа выгружен','ok');
+  });
 }
 
 /* ------------------------------- 9. СВОДНАЯ ОТРИСОВКА И ИНИЦИАЛИЗАЦИЯ ------------------------------- */
@@ -16565,6 +16726,7 @@ function initEvents(){
   }catch(e){}
   bindClick('btnBrigOlapCsv',brigOlapCsvDl);  /* 3.52 */
   bindClick('btnOrderNew',()=>openOrderConstructor());   /* 3.44 */
+  try{renderOrdersRegistry()}catch(e){}   /* 3.62 */
   bindClick('btnPerfTabs',()=>perfMeasureTabs());        /* 3.46 */
   bindClick('btnPerfScale',()=>demoScale(1000));         /* 3.46 */
   bindClick('btnLineage',openLineage);                   /* 3.47 */
@@ -16860,7 +17022,7 @@ async function boot(){
     sigJournalList,sigJournalAdd,sigJournalMerge,sigAckUpdate,sigAckSend,unackedSigs,updateSigBadge,openSigJournal,sigTestLocal,sigWho,
     renderBoard,kanbanRefresh,renderNetAdmin,openPermsMatrix,
     renderMyMonth,meEmp,meSetEmp,meMonthStat,meMk,meNav,printMeMonth,printSigSheet,sigSheetHtml,
-    sigCfg,playSignal,sigNotify,geoPrev,ver:'3.59',
+    sigCfg,playSignal,sigNotify,geoPrev,ver:'3.62',
     /* ===== 3.19: интерфейс и доступность ===== */
     uiPrefs,setUiPref,uiThemeMode,applyUi,cycleTheme,initUiUx,systemMotionOk,
     get THEME_NAMES(){return THEME_NAMES},
@@ -16934,7 +17096,11 @@ async function boot(){
     get FEATURE_MAP(){return FEATURE_MAP},openFeatureMap,trainSelfAudit,openSelfAudit,
     /* ===== 3.59: роли бригад и офлайн-снапшот ===== */
     brigRole,brigLead,brigSetRole,openBrigRolePicker,
+    /* ===== 3.62: подписи приказов ===== */
+    ordersReg,sha359,orderSign,orderVerify,renderOrdersRegistry,
     pubSnapKey,pubSnapSave,pubSnapLoad,pubSnapClear,pubSnapBadge,openPubSnap,
+    /* ===== 3.60: снапшот-дифф ===== */
+    diffStates,pubSnapState,pubSnapDiffLocal,pubSnapDiffServer,diffRenderHtml,
     /* ===== 3.49: серверный контур бригад ===== */
     brigItems,brigadesPush,brigadesPull,mergeBrigadesServer,
     /* ===== 3.50: OLAP бюджета ===== */
@@ -17274,7 +17440,7 @@ function mgrSlidesHtml(){
   const n2=v=>parseFloat(String(v==null?0:v).replace(',','.'))||0;
   const overDuty=dutyRows.slice().sort((a,b)=>n2(b[2])-n2(a[2])).slice(0,10);
   const stamp=esc(stampPlain('rep'));
-  const ver=(window.APP&&APP.ver)||'3.59';
+  const ver=(window.APP&&APP.ver)||'3.62';
   const foot='<footer>'+esc(state.org)+' · '+esc(MUP[m-1])+' '+y+' · '+stamp+'</footer>';
   const kpi=(t,v,d)=>'<div class="kpi"><div class="kt">'+t+'</div><div class="kv">'+v+'</div><div class="kd">'+d+'</div></div>';
   const tbl=(head,rows)=>'<table><thead><tr>'+head.map(h=>'<th>'+esc(h)+'</th>').join('')+'</tr></thead><tbody>'
@@ -17682,6 +17848,8 @@ function paletteBaseItems(){
     {ic:'📅',title:'ICS моей ротации на год',hint:'самообслуживание · 3.37',run:()=>{showTab('me');setTimeout(()=>exportMyRotIcs(),300)}},
     {ic:'★',title:'Роли бригады: бригадир',hint:'планирование · 3.59',run:()=>{showTab('plan');setTimeout(()=>{const b=brigadeList()[0];if(b)openBrigRolePicker(b.id);else toast('Бригад нет','err')},250)}},
     {ic:'📦',title:'Офлайн-снапшот канона: показать/выгрузить',hint:'синхронизация · 3.59',run:()=>openPubSnap()},
+    {ic:'🔍',title:'Снапшот-дифф: снимок против канона',hint:'синхронизация · 3.60',run:()=>openPubSnap()},
+    {ic:'✍',title:'Реестр подписанных приказов',hint:'отчёты · 3.62',run:()=>{showTab('rep');setTimeout(()=>{const c=$('ordersRegBox');if(c&&c.scrollIntoView)c.scrollIntoView({behavior:'smooth',block:'center'});renderOrdersRegistry()},300)}},
     {ic:'❓',title:'Справка и горячие клавиши',hint:'F1',run:()=>showHelp()}
   );
   return items;
@@ -21188,7 +21356,7 @@ function renderMyMonth(){
         myCells+=`<span class="pwcell${di.off?' off':''}${isToday(y,m,d)?' today':''}" title="${d} ${WD[di.wd]}: ${c?esc(c):'выходной'}${mine?' · отметка: '+esc(mine):''}"><em>${d}</em>${c?esc(c):'·'}</span>`;
       }
       box.insertAdjacentHTML('afterbegin',`<div class="card" id="meBrigCard"><h3>Моя бригада<span class="sub">3.36 · ротация со сквозной фазой от якоря</span></h3>
-        <div class="hint" style="margin-top:0"><b>${esc(myBr.name)}</b> · шаблон «${esc(myPat.name)}» (${esc(myPat.seq)}) · смещение фазы ${fmtStd(myBr.offset||0,{unit:'дн'})} · якорь ${esc(myBr.anchor||'—')} · состав: ${fmtStd((myBr.members||[]).length,{unit:'чел'})}</div>
+        <div class="hint" style="margin-top:0"><b>${esc(myBr.name)}</b> · шаблон «${esc(myPat.name)}» (${esc(myPat.seq)}) · смещение фазы ${fmtStd(myBr.offset||0,{unit:'дн'})} · якорь ${esc(myBr.anchor||'—')} · состав: ${fmtStd((myBr.members||[]).length,{unit:'чел'})}${(myBr.roles||{})[e.id]==='lead'?' <span class="pill g">вы — бригадир</span>':''}</div>
         <div class="pwstrip" style="margin-top:8px" role="img" aria-label="Моя ротация на ${MUP[m-1]} ${y}: цикл ${esc(myPat.seq)}">${myCells}</div>
         <div class="hint" style="margin-top:6px">Цикл продолжается через границу месяца без сбоя: фаза считается от даты-якоря бригады. Состав бригады обновляет табельщик.</div>
         <div class="mini" style="margin-top:8px;display:flex;gap:6px"><button class="btn ghost small" id="meBrigIcs" title="Личная ротация за год в календарь (ICS)">⤓ ICS моей ротации</button></div></div>`);

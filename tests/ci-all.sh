@@ -37,4 +37,9 @@ echo "--- 3.59: роли бригад и офлайн-снапшот ---"
 node tests/smoke-359.mjs План-табель-WFM-3.59.html
 node tests/integ-359.mjs
 node tests/smoke-359.mjs План-табель-WFM-3.59-offline.html
-echo "CI-ALL: PASS (3.36–3.59: регрессы, поезд, серверные интеги, офлайн финалов)"
+echo "--- 3.60–3.62: снапшот-дифф, бригадир в формах, подписи приказов ---"
+node tests/smoke-360.mjs План-табель-WFM-3.60.html
+node tests/smoke-361.mjs План-табель-WFM-3.61.html
+node tests/smoke-362.mjs План-табель-WFM-3.62.html
+node tests/smoke-362.mjs План-табель-WFM-3.62-offline.html
+echo "CI-ALL: PASS (3.36–3.62: регрессы, поезд, серверные интеги, офлайн финалов)"
