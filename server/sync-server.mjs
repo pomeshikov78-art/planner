@@ -846,6 +846,13 @@ async function apiHttp(req,res,u,p){
         offset:Math.max(0,Math.min(60,Math.round(+it.offset||0))),
         members:Array.isArray(it.members)?it.members.slice(0,200).map(x=>String(x).slice(0,40)):[],
         ts:+it.ts||now()};
+      /* 3.59: роли бригады — только участники, значения lead|member, бригадир один */
+      const roles359={};
+      if(it.roles&&typeof it.roles==='object')Object.entries(it.roles).slice(0,200).forEach(([eid359,rl359])=>{
+        if(rec.members.includes(String(eid359))&&(rl359==='lead'||rl359==='member'))roles359[String(eid359)]=rl359});
+      const leads359=Object.keys(roles359).filter(x=>roles359[x]==='lead');
+      leads359.slice(1).forEach(x=>{roles359[x]='member'});
+      rec.roles=roles359;
       const ex=byId[id];
       if(ex&&(ex.ts||0)>rec.ts)return;   /* last-write-wins по ts */
       byId[id]=rec;touched++;

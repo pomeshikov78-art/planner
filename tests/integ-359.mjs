@@ -1,0 +1,30 @@
+/* WFM 3.59 · integ — серверная валидация roles в PUT /api/v1/brigades */
+import { spawn } from 'node:child_process';
+import { existsSync, rmSync } from 'node:fs';
+import path from 'node:path';
+let pass = 0, fail = 0;
+const ok = (c, n) => { if (c) { pass++; console.log('  ok · ' + n); } else { fail++; console.log('  FAIL · ' + n); } };
+const PORT = 8907, BASE = `http://127.0.0.1:${PORT}`;
+const F = path.resolve('server/plan-tabel-brigades.json');
+if (existsSync(F)) rmSync(F);
+const srv = spawn(process.execPath, ['server/sync-server.mjs'], { env: { ...process.env, PT_PORT: String(PORT) }, stdio: ['ignore', 'pipe', 'pipe'] });
+srv.stdout.on('data', () => {}); srv.stderr.on('data', () => {});
+let up = false;
+for (let i = 0; i < 60 && !up; i++) { try { const r = await fetch(BASE + '/health'); up = r.status < 500; } catch (e) {} if (!up) await new Promise(r => setTimeout(r, 250)); }
+ok(up, 'сервер поднялся');
+const put = async items => { const r = await fetch(BASE + '/api/v1/brigades', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ items }) }); return { status: r.status, j: await r.json() }; };
+const get = async () => (await fetch(BASE + '/api/v1/brigades')).json();
+let r = await put([{ id: 'b1', name: 'Б1', patId: 'p2', anchor: '2026-01-01', offset: 0, members: ['e1', 'e2'], roles: { e1: 'lead', e2: 'member', eX: 'lead' }, ts: 1 }]);
+ok(r.status === 200, 'PUT с roles принят');
+let g = await get();
+ok(g.items[0].roles.e1 === 'lead' && g.items[0].roles.eX === undefined, 'чужой ключ roles отброшен');
+r = await put([{ id: 'b1', name: 'Б1', patId: 'p2', anchor: '2026-01-01', offset: 0, members: ['e1', 'e2'], roles: { e1: 'lead', e2: 'lead' }, ts: 2 }]);
+g = await get();
+ok(Object.values(g.items[0].roles).filter(x => x === 'lead').length === 1, 'сервер: бригадир один (второй lead понижен)');
+r = await put([{ id: 'b1', name: 'Б1', patId: 'p2', anchor: '2026-01-01', offset: 0, members: ['e1', 'e2'], roles: { e1: 'captain' }, ts: 3 }]);
+g = await get();
+ok(g.items[0].roles.e1 === undefined, 'неизвестное значение роли отброшено');
+srv.kill('SIGTERM');
+if (existsSync(F)) rmSync(F);
+console.log(`\n===== integ-359: PASS ${pass} · FAIL ${fail} =====`);
+process.exit(fail ? 1 : 0);
