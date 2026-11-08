@@ -1,0 +1,61 @@
+/* WFM 3.65 · smoke — панель бригадира в «Моём месяце» */
+import { boot, mkOk } from './harness.mjs';
+const file = process.argv[2] || 'План-табель-WFM-3.65.html';
+const { APP, W, $, errors } = await boot(file);
+const { ok, section, report } = mkOk();
+const cur = APP.cur;
+const mk = `${cur.y}-${String(cur.m).padStart(2, '0')}`;
+
+section('Данные панели: leadPanelData');
+APP.state.departments.push({ id: 'lp65', name: 'LP-65', minDuty: 1, dutyCode: 'Д1' });
+const es = Array.from({ length: 4 }, (_, i) => ({ id: 'lp65e' + i, deptId: 'lp65', name: 'Панелев П-' + i, pos: '', rate: 1, dutyEligible: true, tab: 'LP65-' + i, vacationDays: 28, hoursWeek: 0 }));
+APP.state.employees.push(...es);
+W.applyPatternFan('p2', es, cur.y, cur.m, `${cur.y}-01-01`, false, 2, { save: true });
+const b = APP.state.brigades.find(x => (x.members || []).includes('lp65e0'));
+const lead = b.members[0], mate = b.members[1];
+W.brigSetRole(b.id, lead, 'lead');
+const LP = W.leadPanelData(b.id, cur.y, cur.m, 10);
+ok(LP && LP.brig.id === b.id && LP.members === b.members.length, 'leadPanelData: бригада и состав');
+ok(LP.week.length === 7 && LP.week.every(w => w.dk && w.duty >= 0 && w.absent >= 0), 'неделя: 7 дней со сводкой дежурных/отсутствующих');
+ok(LP.duty + LP.absent + LP.rot <= LP.members, 'сводка дня не превышает состав бригады');
+ok(W.leadPanelData('нет-такой', cur.y, cur.m, 10) === null, 'неизвестная бригада → null');
+APP.state.plan[mk] = APP.state.plan[mk] || {};
+const rowM = APP.state.plan[mk];
+const prev = (rowM[mate] || {})[10];
+rowM[mate] = Object.assign({}, rowM[mate], { 10: 'Б' });
+const LP2 = W.leadPanelData(b.id, cur.y, cur.m, 10);
+ok(LP2.absent === LP.absent + 1, 'больничный напарника учтён в «отсутствуют»');
+if (prev === undefined) delete rowM[mate][10]; else rowM[mate][10] = prev;
+
+section('Заявки бригады и ★-счётчик (связка с 3.64)');
+const s = W.addSwap({ type: 'sub', eid1: mate, eid2: lead, mk1: mk, day1: 11, code: 'Д1', back: '', reason: 'тест 365' });
+const LP3 = W.leadPanelData(b.id, cur.y, cur.m, 10);
+ok(LP3.swaps.length === 1 && LP3.leadPending.length === 0, 'активная заявка видна в сводке бригады');
+APP.state.settings.leadApprove = true;
+W.swapAct(s.id, 'agree');
+const LP4 = W.leadPanelData(b.id, cur.y, cur.m, 10);
+ok(s.status === 'lead_review' && LP4.leadPending.length === 1, 'заявка ждёт ★-подтверждения бригадира');
+
+section('Карточка в «Моём месяце»');
+W.meSetEmp(lead);
+W.showTab('me');
+const card = $('meLeadCard');
+ok(!!card, 'карточка «Панель бригадира» отрenderена для lead');
+ok(card && /дежурят сегодня/.test(card.textContent) && /человек в бригаде/.test(card.textContent), 'KPI панели: дежурят / отсутствуют / ротация / состав');
+ok(card && /ждут вашего ★-подтверждения: 1/.test(card.innerHTML), 'счётчик ★-заявок в панели');
+ok(card && card.querySelectorAll('.pwcell').length === 7, 'полоса недели: 7 ячеек');
+ok(card && !!$('meLeadSwaps') && !!$('meLeadVed'), 'кнопки «⇄ Открыть обмены» и «🖨 Ведомость бригады»');
+$('meLeadSwaps').click();
+ok($('view-swap').hidden === false, '«⇄ Открыть обмены» переключает на вкладку обменов');
+W.showTab('me');
+W.meSetEmp(mate);
+ok(!$('meLeadCard'), 'у рядового участника панели нет');
+APP.state.settings.leadApprove = false;
+
+section('Справка и версия');
+W.showHelp();
+ok(/Новое в версии 3\.65/.test($('modalBox').textContent) && /leadPanelData/.test($('modalBox').textContent), 'справка: блок 3.65');
+W.closeModal();
+ok(APP.ver === '3.65', 'APP.ver === 3.65');
+ok(errors.length === 0, 'нет рантайм-ошибок' + (errors.length ? ': ' + errors.slice(0, 3).join(' | ') : ''));
+process.exit(report(file));

@@ -97,12 +97,18 @@ section('Годовой баланс и ребалансировка по пож
 const resFan = W.applyPatternFan('p2', es8, cur.y, cur.m, `${MK}-01`, false, 2, { save: true });
 ok(resFan.groups.length === 2, 'веер: 2 бригады сохранены');
 const brig0 = APP.state.brigades[0], brig1 = APP.state.brigades[1];
-/* пожелание «не ставить» на даты дежурства фазы 0 (1 и 5 мая) */
+/* пожелание «не ставить» на два дежурства фазы 0 в мае; дни считаются от якоря
+   бригады — тест не зависит от месяца запуска (фикс от 08.11.2026) */
 const m0 = brig0.members[0];
+const pat2 = APP.state.patterns.find(p => p.id === 'p2');
+const anch0 = W.addDays(brig0.anchor || `${YEAR}-01-01`, -(brig0.offset || 0));
+const mayDuty = [];
+for (let d = 1; d <= 31 && mayDuty.length < 2; d++) if (W.patternCodeAt(pat2, anch0, YEAR, 5, d)) mayDuty.push(d);
+const p2s = n => String(n).padStart(2, '0');
 APP.state.dutyWishes = APP.state.dutyWishes || [];
-APP.state.dutyWishes.push({ eid: m0, kind: 'no', from: `${YEAR}-05-02`, to: `${YEAR}-05-06` });
+APP.state.dutyWishes.push({ eid: m0, kind: 'no', from: `${YEAR}-05-${p2s(mayDuty[0])}`, to: `${YEAR}-05-${p2s(mayDuty[1])}` });
 const simY0 = W.brigadeYearSim(YEAR);
-ok(simY0.blocks === 2, 'баланс до ребаланса: 2 конфликта с «не ставить» (2 и 6 мая у фазы 0)');
+ok(simY0.blocks === 2, 'баланс до ребаланса: 2 конфликта с «не ставить» (' + mayDuty.join(' и ') + ' мая у фазы 0)');
 ok(simY0.brigades.length === 2 && simY0.all.length === 8, 'баланс: 2 бригады, 8 сотрудников');
 ok(simY0.sd >= 0 && simY0.mean > 0, 'баланс: среднее и SD посчитаны (' + simY0.mean + ' / ' + simY0.sd + ')');
 const reb = W.brigadeRebalance(YEAR);

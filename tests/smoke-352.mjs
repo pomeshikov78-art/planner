@@ -10,9 +10,18 @@ APP.state.departments.push({ id: 'bol', name: 'OLAP-тест', minDuty: 1, dutyC
 const es = Array.from({ length: 4 }, (_, i) => ({ id: 'ol' + (i + 1), deptId: 'bol', name: 'Олапов О-' + (i + 1), pos: 'дежурный', rate: 1, dutyEligible: true, tab: 'OL-' + (i + 1), vacationDays: 28, hoursWeek: 0 }));
 APP.state.employees.push(...es);
 W.applyPatternFan('p2', es, cur.y, cur.m, `${Y}-${String(cur.m).padStart(2, '0')}-01`, false, 2, { save: true });
-/* конфликт: пожелание «не ставить» в день дежурства фазы 0 */
+/* конфликт: пожелание «не ставить» в дни дежурства фазы 0 в мае; дни считаем
+   от якоря бригады — тест не зависит от месяца запуска (фикс 08.11.2026) */
 APP.state.dutyWishes = APP.state.dutyWishes || [];
-APP.state.dutyWishes.push({ eid: APP.state.brigades[0].members[0], kind: 'no', from: `${Y}-05-02`, to: `${Y}-05-06` });
+{
+  const b0 = APP.state.brigades[0];
+  const pat2 = APP.state.patterns.find(p => p.id === b0.patId);
+  const anch0 = W.addDays(b0.anchor || `${Y}-01-01`, -(b0.offset || 0));
+  const mayDuty = [];
+  for (let d = 1; d <= 31 && mayDuty.length < 2; d++) if (W.patternCodeAt(pat2, anch0, Y, 5, d)) mayDuty.push(d);
+  const p2s = n => String(n).padStart(2, '0');
+  APP.state.dutyWishes.push({ eid: b0.members[0], kind: 'no', from: `${Y}-05-${p2s(mayDuty[0])}`, to: `${Y}-05-${p2s(mayDuty[1])}` });
+}
 W.showTab('an');
 W.renderBrigOlap();
 const box = $('brigolapBox');

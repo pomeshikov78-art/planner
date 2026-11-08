@@ -1,0 +1,75 @@
+/* WFM 3.64 · smoke — одобрение обменов бригадиром */
+import { boot, mkOk } from './harness.mjs';
+const file = process.argv[2] || 'План-табель-WFM-3.64.html';
+const { APP, W, $, errors } = await boot(file);
+const { ok, section, report } = mkOk();
+const cur = APP.cur;
+const mk = `${cur.y}-${String(cur.m).padStart(2, '0')}`;
+
+section('Маршрут без флажка (обратная совместимость)');
+APP.state.departments.push({ id: 'la64', name: 'LA-64', minDuty: 1, dutyCode: 'Д1' });
+const es = Array.from({ length: 4 }, (_, i) => ({ id: 'la64e' + i, deptId: 'la64', name: 'Обменов О-' + i, pos: '', rate: 1, dutyEligible: true, tab: 'LA64-' + i, vacationDays: 28, hoursWeek: 0 }));
+APP.state.employees.push(...es);
+W.applyPatternFan('p2', es, cur.y, cur.m, `${cur.y}-01-01`, false, 2, { save: true });
+const b = APP.state.brigades.find(x => (x.members || []).includes('la64e0'));
+const leadEid = b.members[0], mateEid = b.members[1];
+W.brigSetRole(b.id, leadEid, 'lead');
+ok(W.leadApproveOn() === false, 'по умолчанию settings.leadApprove выключен');
+ok(W.empBrigLead(leadEid) === leadEid && W.empBrigLead('la64e9') === null, 'empBrigLead: бригадир своей бригады / нет бригады');
+const s1 = W.addSwap({ type: 'sub', eid1: leadEid, eid2: mateEid, mk1: mk, day1: 10, code: 'Д1', back: '', reason: 'тест 364' });
+ok(!!s1 && s1.status === 'new', 'заявка создана');
+ok(W.swapNeedsLead(s1) === false, 'без флажка шаг бригадира не требуется');
+W.swapAct(s1.id, 'agree');
+ok(s1.status === 'agreed', 'прежний маршрут: сразу «согласовано напарником»');
+
+section('Флажок и статус lead_review');
+W.showTab('swap');
+const chk = $('leadApproveChk');
+ok(!!chk, 'флажок «одобрение бригадиром» в карточке обменов');
+chk.checked = true; chk.onchange();
+ok(W.leadApproveOn() === true && APP.state.settings.leadApprove === true, 'флажок включён и сохранён в канон');
+ok(APP.state.log.some(r => r.action === 'Одобрение обменов бригадиром включено'), 'аудит включения флажка');
+const s2 = W.addSwap({ type: 'sub', eid1: leadEid, eid2: mateEid, mk1: mk, day1: 11, code: 'Д1', back: '', reason: 'тест lead' });
+W.swapAct(s2.id, 'agree');
+ok(s2.status === 'lead_review', 'после согласия напарника — «ждёт бригадира (★)»');
+W.renderSwaps();
+const html = $('swapBox').innerHTML;
+ok(/ждёт бригадира/.test(html), 'карточка: статус «Согласовано · ждёт бригадира (★)»');
+ok(/★ Подтвердить бригадиром/.test(html) && /Отклонено бригадиром/.test(html), 'кнопки ★-подтверждения и отклонения бригадиром');
+ok(/ждут бригадира/.test(html), 'KPI «ждут бригадира (★)»');
+W.swapAct(s2.id, 'approve');
+ok(s2.status === 'lead_review', '«Применить к плану» заблокирован до ★-подтверждения');
+ok(APP.state.log.some(r => r.action === 'Обмен заблокирован до подтверждения бригадира'), 'аудит блокировки');
+
+section('Подтверждение и отклонение бригадиром');
+W.swapAct(s2.id, 'leadok');
+ok(s2.status === 'agreed' && s2.leadOk === true && s2.leadBy, '★ подтверждение: статус agreed, leadOk, leadBy');
+ok(s2.history.some(h => h.act === 'подтверждено бригадиром'), 'история заявки: «подтверждено бригадиром»');
+ok(APP.state.log.some(r => r.action === 'Бригадир подтвердил обмен'), 'аудит подтверждения');
+W.swapAct(s2.id, 'approve');
+ok(s2.status === 'applied', 'после ★ заявка применяется к плану руководителем');
+const s3 = W.addSwap({ type: 'sub', eid1: leadEid, eid2: mateEid, mk1: mk, day1: 12, code: 'Д1', back: '', reason: 'тест leadno' });
+W.swapAct(s3.id, 'agree');
+W.swapAct(s3.id, 'leadno', 'нет допусков');
+ok(s3.status === 'rejected' && s3.rejectNote === 'нет допусков', '«Отклонено бригадиром» с нотой');
+ok(APP.state.log.some(r => r.action === 'Бригадир отклонил обмен'), 'аудит отклонения бригадиром');
+
+section('Без бригадира и выключение флажка');
+const out1 = { id: 'la64x1', deptId: 'la64', name: 'Внешшин В-1', pos: '', rate: 1, dutyEligible: true, tab: 'LA64-X1', vacationDays: 28, hoursWeek: 0 };
+const out2 = { id: 'la64x2', deptId: 'la64', name: 'Внешшин В-2', pos: '', rate: 1, dutyEligible: true, tab: 'LA64-X2', vacationDays: 28, hoursWeek: 0 };
+APP.state.employees.push(out1, out2);
+const s5 = W.addSwap({ type: 'sub', eid1: out1.id, eid2: out2.id, mk1: mk, day1: 14, code: 'Д1', back: '', reason: 'без бригады' });
+W.swapAct(s5.id, 'agree');
+ok(s5.status === 'agreed', 'флажок включён, но у участников нет бригадира — прежний маршрут');
+chk.checked = false; chk.onchange();
+const s4 = W.addSwap({ type: 'sub', eid1: leadEid, eid2: mateEid, mk1: mk, day1: 13, code: 'Д1', back: '', reason: 'off' });
+W.swapAct(s4.id, 'agree');
+ok(s4.status === 'agreed' && W.leadApproveOn() === false, 'флажок выключен — снова прежний маршрут');
+
+section('Справка и версия');
+W.showHelp();
+ok(/Новое в версии 3\.64/.test($('modalBox').textContent) && /leadApprove/.test($('modalBox').textContent), 'справка: блок 3.64');
+W.closeModal();
+ok(APP.ver === '3.64', 'APP.ver === 3.64');
+ok(errors.length === 0, 'нет рантайм-ошибок' + (errors.length ? ': ' + errors.slice(0, 3).join(' | ') : ''));
+process.exit(report(file));

@@ -91,9 +91,15 @@ await page.waitForSelector('#modal', { state: 'hidden' });
 
 section('Годовой баланс: конфликты с пожеланиями и ребаланс');
 await page.evaluate(() => {
+  /* дни «не ставить» считаем от якоря бригады — сценарий не зависит от месяца запуска (фикс 08.11.2026) */
   const b = APP.state.brigades[0];
+  const pat = APP.state.patterns.find(p => p.id === b.patId) || APP.state.patterns.find(p => p.id === 'p2');
+  const anch = addDays(b.anchor || (APP.cur.y + '-01-01'), -(b.offset || 0));
+  const days = [];
+  for (let d = 1; d <= 31 && days.length < 2; d++) if (patternCodeAt(pat, anch, APP.cur.y, 5, d)) days.push(d);
+  const p2s = n => String(n).padStart(2, '0');
   APP.state.dutyWishes = APP.state.dutyWishes || [];
-  APP.state.dutyWishes.push({ eid: b.members[0], kind: 'no', from: APP.cur.y + '-05-02', to: APP.cur.y + '-05-06' });
+  APP.state.dutyWishes.push({ eid: b.members[0], kind: 'no', from: APP.cur.y + '-05-' + p2s(days[0]), to: APP.cur.y + '-05-' + p2s(days[1]) });
 });
 await closeAnyModal();
 await page.click('#btnBrigYear');

@@ -11,11 +11,20 @@ APP.state.departments.push({ id: 'bud', name: 'Бюджет-тест', minDuty: 
 const e1 = { id: 'b1', deptId: 'bud', name: 'Бюджетов Б. Б.', pos: 'спец', rate: 1, dutyEligible: true, tab: 'BUD-1', vacationDays: 28, hoursWeek: 40, rubHour: 1000 };
 APP.state.employees.push(e1);
 APP.state.plan[MK] = APP.state.plan[MK] || {};
-APP.state.plan[MK]['b1'] = { 1: 'Я', 2: 'Д1' };
+/* отметки ставим на первые два будних НЕкоротких дня, норму считаем с учётом
+   коротких (предпраздничных) дней — тест не зависит от календаря (фикс 08.11.2026) */
+const DIMT = new Date(cur.y, cur.m, 0).getDate();
+const marks = [];
+for (let d = 1; d <= DIMT && marks.length < 2; d++) {
+  const di = W.dayInfo(cur.y, cur.m, d);
+  if (!di.off && !W.isShort(cur.y, cur.m, d)) marks.push(d);
+}
+APP.state.plan[MK]['b1'] = { [marks[0]]: 'Я', [marks[1]]: 'Д1' };
 const R = W.ratesCfg();
 /* ФОТ месяца: все будни по норме (явки по умолчанию) + явные отметки + ночные надбавки */
 const wd = W.monthNorm(cur.y, cur.m).wd;
-const expH = (wd - 2) * 8 + 8 + 24;   /* будни без отметок + Я(8) + Д1(24) */
+const shortWd = W.monthNorm(cur.y, cur.m).short;
+const expH = (wd - 2 - shortWd) * 8 + shortWd * 7 + 8 + 24;   /* будни без отметок (короткие — 7 ч) + Я(8) + Д1(24) */
 const expCost = Math.round(expH * 1000 + 8 * 1000 * (R.nightPct || 0) / 100);
 ok(W.empCost('b1', cur.y, cur.m, 'plan') === expCost, 'empCost: будни по норме + отметки + ночные×надбавка (' + expCost + ' ₽)');
 ok(W.rubHour({}) === (APP.state.settings.rubHour || 550), 'rubHour: персональная ставка приоритетнее общей');

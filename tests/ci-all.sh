@@ -42,4 +42,9 @@ node tests/smoke-360.mjs План-табель-WFM-3.60.html
 node tests/smoke-361.mjs План-табель-WFM-3.61.html
 node tests/smoke-362.mjs План-табель-WFM-3.62.html
 node tests/smoke-362.mjs План-табель-WFM-3.62-offline.html
-echo "CI-ALL: PASS (3.36–3.62: регрессы, поезд, серверные интеги, офлайн финалов)"
+echo "--- 3.63–3.65: ICS round-trip, одобрение обменов бригадиром, панель бригадира ---"
+node tests/smoke-363.mjs План-табель-WFM-3.63.html
+node tests/smoke-364.mjs План-табель-WFM-3.64.html
+node tests/smoke-365.mjs План-табель-WFM-3.65.html
+node tests/smoke-365.mjs План-табель-WFM-3.65-offline.html
+echo "CI-ALL: PASS (3.36–3.65: регрессы, поезд, серверные интеги, офлайн финалов)"
